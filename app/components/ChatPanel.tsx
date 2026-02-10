@@ -1,0 +1,447 @@
+'use client'
+
+import { useChat } from '@/lib/hooks/useChat'
+import { useState, useRef } from 'react'
+
+interface ChatPanelProps {
+  projectId?: string
+}
+
+export default function ChatPanel({ projectId = 'ai-agent-dashboard' }: ChatPanelProps) {
+  const { messages, sendMessage, uploadFile, isLoading } = useChat({ projectId })
+  const [input, setInput] = useState('')
+  const [activeTab, setActiveTab] = useState<'chat' | 'swarm'>('chat')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleSend = async () => {
+    if (!input.trim()) return
+    await sendMessage(input)
+    setInput('')
+  }
+
+  const handleFileClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    
+    try {
+      await uploadFile(file)
+    } catch (err) {
+      console.error('File upload error:', err)
+    }
+    
+    e.target.value = ''
+  }
+
+  return (
+    <aside className="panel chat" style={{ borderLeft: '1px solid var(--glass-border)' }}>
+      {/* Chat Tabs */}
+      <div className="chat-tabs">
+        <button 
+          className={`chat-tab ${activeTab === 'chat' ? 'active' : ''}`}
+          onClick={() => setActiveTab('chat')}
+        >
+          Sohbet
+        </button>
+        <button 
+          className={`chat-tab ${activeTab === 'swarm' ? 'active' : ''}`}
+          onClick={() => setActiveTab('swarm')}
+        >
+          Agent Swarm
+        </button>
+      </div>
+
+      {activeTab === 'chat' ? (
+        <>
+          {/* Messages */}
+          <div className="chat-messages">
+            {messages.length === 0 ? (
+              <div className="message system">
+                <div className="message-header">
+                  <span className="message-agent-name">Betsy</span>
+                  <span className="message-model">Kimi K2.5</span>
+                  <span className="message-time">şimdi</span>
+                </div>
+                Merhaba Murat! AI Agent Dashboard projesinde sana nasıl yardımcı olabilirim? ✦
+              </div>
+            ) : (
+              messages.map((msg: any) => (
+                <div key={msg.id} className={`message ${msg.role}`}>
+                  {msg.role === 'agent' && (
+                    <div className="message-header">
+                      <span className="message-agent-name">Betsy</span>
+                      <span className="message-model">Kimi K2.5</span>
+                      <span className="message-time">
+                        {new Date(msg.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                  )}
+                  <div>{msg.content}</div>
+                  
+                  {msg.type === 'file' && msg.file_info && (
+                    <div className="file-preview-card">
+                      <div className="file-preview-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                          <polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                      </div>
+                      <div className="file-preview-info">
+                        <div className="file-preview-name">
+                          {typeof msg.file_info === 'string' 
+                            ? JSON.parse(msg.file_info).name 
+                            : msg.file_info.name}
+                        </div>
+                        <div className="file-preview-meta">
+                          {typeof msg.file_info === 'string'
+                            ? JSON.parse(msg.file_info).type
+                            : msg.file_info.type}
+                        </div>
+                      </div>
+                      <button className="file-preview-action">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+            
+            {isLoading && (
+              <div className="thinking-indicator">
+                <div className="thinking-dots">
+                  <div className="thinking-dot"></div>
+                  <div className="thinking-dot"></div>
+                  <div className="thinking-dot"></div>
+                </div>
+                <span className="thinking-text">Düşünüyor...</span>
+              </div>
+            )}
+          </div>
+
+          {/* Chat Input */}
+          <div className="chat-input-area">
+            <div className="chat-input-wrapper">
+              <div className="chat-input-actions">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  className="hidden"
+                  accept="*/*"
+                />
+                <button className="chat-action-btn" onClick={handleFileClick} title="Dosya ekle">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                  </svg>
+                </button>
+                <button className="chat-action-btn" title="Ses kaydet">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" y1="19" x2="12" y2="23"/>
+                    <line x1="8" y1="23" x2="16" y2="23"/>
+                  </svg>
+                </button>
+              </div>
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
+                placeholder="Mesaj yaz..."
+                className="chat-input"
+                rows={1}
+                disabled={isLoading}
+              />
+              <button 
+                onClick={handleSend}
+                disabled={isLoading || !input.trim()}
+                className="send-btn"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="22" y1="2" x2="11" y2="13"/>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </>
+      ) : (
+        /* Swarm Tab Content */
+        <div className="swarm-content">
+          <div className="swarm-agent-card">
+            <div className="swarm-agent-header">
+              <div className="swarm-avatar cyan">K</div>
+              <div>
+                <div className="swarm-agent-name">Kimi</div>
+                <div className="swarm-agent-model">Kimi K2.5</div>
+              </div>
+              <div className="swarm-status">
+                <div className="swarm-status-dot working"></div>
+                <span>Çalışıyor</span>
+              </div>
+            </div>
+            <div className="swarm-task">Dashboard layout refactoring</div>
+            <div className="swarm-progress">
+              <div className="swarm-progress-bar">
+                <div className="swarm-progress-fill cyan" style={{ width: '75%' }}></div>
+              </div>
+            </div>
+          </div>
+
+          <div className="swarm-agent-card">
+            <div className="swarm-agent-header">
+              <div className="swarm-avatar purple">O</div>
+              <div>
+                <div className="swarm-agent-name">Opus</div>
+                <div className="swarm-agent-model">Claude Opus</div>
+              </div>
+              <div className="swarm-status">
+                <div className="swarm-status-dot idle"></div>
+                <span>Bekliyor</span>
+              </div>
+            </div>
+            <div className="swarm-task">Review queue'da görev bekliyor</div>
+          </div>
+
+          <div className="swarm-agent-card">
+            <div className="swarm-agent-header">
+              <div className="swarm-avatar pink">C</div>
+              <div>
+                <div className="swarm-agent-name">Claude</div>
+                <div className="swarm-agent-model">Claude Sonnet</div>
+              </div>
+              <div className="swarm-status">
+                <div className="swarm-status-dot working"></div>
+                <span>Çalışıyor</span>
+              </div>
+            </div>
+            <div className="swarm-task">Wireframe alternatifleri hazırlıyor</div>
+            <div className="swarm-progress">
+              <div className="swarm-progress-bar">
+                <div className="swarm-progress-fill pink" style={{ width: '45%' }}></div>
+              </div>
+            </div>
+          </div>
+
+          <div className="swarm-agent-card">
+            <div className="swarm-agent-header">
+              <div className="swarm-avatar green">S</div>
+              <div>
+                <div className="swarm-agent-name">Sonnet</div>
+                <div className="swarm-agent-model">Claude Sonnet 3.5</div>
+              </div>
+              <div className="swarm-status">
+                <div className="swarm-status-dot waiting"></div>
+                <span>Review Bekliyor</span>
+              </div>
+            </div>
+            <div className="swarm-task">API endpoint testleri tamamlandı</div>
+          </div>
+        </div>
+      )}
+
+      <style jsx>{`
+        .panel {
+          background: var(--glass-bg);
+          backdrop-filter: var(--glass-blur);
+          -webkit-backdrop-filter: var(--glass-blur);
+          border: 1px solid var(--glass-border);
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+        }
+        .chat-tabs {
+          display: flex; gap: 0; border-bottom: 1px solid var(--glass-border);
+        }
+        .chat-tab {
+          flex: 1; padding: 10px; text-align: center;
+          font-size: 11px; font-weight: 500; letter-spacing: 0.5px;
+          text-transform: uppercase; color: var(--text-tertiary);
+          border: none; background: none; cursor: pointer;
+          border-bottom: 2px solid transparent;
+          transition: all 0.15s ease;
+        }
+        .chat-tab.active { color: var(--text-primary); border-bottom-color: var(--accent-cyan); }
+        .chat-tab:hover:not(.active) { color: var(--text-secondary); }
+        .chat-messages {
+          flex: 1; overflow-y: auto; padding: 16px;
+          display: flex; flex-direction: column; gap: 12px;
+        }
+        .message {
+          max-width: 88%; padding: 10px 14px;
+          border-radius: 16px; font-size: 13px;
+          line-height: 1.55;
+        }
+        .message.user {
+          align-self: flex-end;
+          background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+          border-bottom-right-radius: 4px;
+        }
+        .message.agent {
+          align-self: flex-start;
+          background: rgba(255,255,255,0.06);
+          border: 1px solid var(--glass-border);
+          border-bottom-left-radius: 4px;
+        }
+        .message.system {
+          align-self: center; max-width: 100%;
+          background: rgba(168,85,247,0.08);
+          border: 1px solid rgba(168,85,247,0.15);
+          border-radius: 8px;
+          font-size: 11px; color: var(--text-secondary);
+          text-align: center; padding: 8px 14px;
+        }
+        .message-header {
+          display: flex; align-items: center; gap: 6px;
+          margin-bottom: 4px;
+        }
+        .message-agent-name { font-size: 11px; font-weight: 600; color: var(--accent-cyan); }
+        .message-model { font-size: 9px; color: var(--text-tertiary); }
+        .message-time { font-size: 9px; color: var(--text-tertiary); margin-left: auto; }
+        .thinking-indicator {
+          display: flex; align-items: center; gap: 6px;
+          align-self: flex-start; padding: 8px 14px;
+        }
+        .thinking-dots { display: flex; gap: 4px; }
+        .thinking-dot {
+          width: 5px; height: 5px; border-radius: 50%;
+          background: var(--accent-cyan); opacity: 0.3;
+          animation: thinking 1.4s infinite;
+        }
+        .thinking-dot:nth-child(2) { animation-delay: 0.2s; }
+        .thinking-dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes thinking {
+          0%, 100% { opacity: 0.3; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.2); }
+        }
+        .thinking-text { font-size: 11px; color: var(--text-tertiary); }
+        .chat-input-area {
+          padding: 12px 14px; border-top: 1px solid var(--glass-border);
+          flex-shrink: 0;
+        }
+        .chat-input-wrapper {
+          display: flex; align-items: flex-end; gap: 8px;
+          background: rgba(0,0,0,0.25); border-radius: 16px;
+          padding: 6px 6px 6px 14px; border: 1px solid var(--glass-border);
+          transition: border-color 0.15s ease;
+        }
+        .chat-input-wrapper:focus-within { border-color: rgba(0,212,255,0.3); }
+        .chat-input {
+          flex: 1; background: transparent; border: none;
+          color: var(--text-primary); font-size: 13px; resize: none;
+          outline: none; min-height: 20px; max-height: 100px;
+          font-family: inherit; line-height: 1.4;
+        }
+        .chat-input::placeholder { color: var(--text-tertiary); }
+        .chat-input-actions {
+          display: flex; align-items: center; gap: 2px;
+          flex-shrink: 0;
+        }
+        .chat-action-btn {
+          width: 30px; height: 30px; border-radius: 50%;
+          border: none; background: transparent;
+          color: var(--text-tertiary); cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+          transition: all 0.15s ease; flex-shrink: 0;
+        }
+        .chat-action-btn:hover {
+          color: var(--accent-cyan); background: rgba(0,212,255,0.08);
+        }
+        .send-btn {
+          width: 30px; height: 30px; border-radius: 50%; border: none;
+          background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+          color: white; cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+          transition: transform 0.15s ease, opacity 0.15s ease;
+          flex-shrink: 0; opacity: 0.7;
+        }
+        .send-btn:hover { transform: scale(1.05); opacity: 1; }
+        .send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        .swarm-content { padding: 14px; display: flex; flex-direction: column; gap: 10px; flex: 1; overflow-y: auto; }
+        .swarm-agent-card {
+          background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border);
+          border-radius: 12px; padding: 12px; transition: all 0.15s ease;
+        }
+        .swarm-agent-card:hover { border-color: var(--glass-border-hover); }
+        .swarm-agent-header {
+          display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+        }
+        .swarm-avatar {
+          width: 28px; height: 28px; border-radius: 8px;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 12px; font-weight: 700; flex-shrink: 0;
+        }
+        .swarm-avatar.cyan { background: linear-gradient(135deg, var(--accent-cyan), #0ea5e9); }
+        .swarm-avatar.purple { background: linear-gradient(135deg, var(--accent-purple), #7c3aed); }
+        .swarm-avatar.pink { background: linear-gradient(135deg, var(--accent-pink), #f43f5e); }
+        .swarm-avatar.green { background: linear-gradient(135deg, var(--accent-green), #16a34a); }
+        .swarm-agent-name { font-size: 12px; font-weight: 600; }
+        .swarm-agent-model { font-size: 9px; color: var(--text-tertiary); margin-top: 1px; }
+        .swarm-status {
+          margin-left: auto; display: flex; align-items: center; gap: 5px;
+          font-size: 10px; font-weight: 500;
+        }
+        .swarm-status-dot { width: 6px; height: 6px; border-radius: 50%; }
+        .swarm-status-dot.working { background: var(--accent-green); }
+        .swarm-status-dot.idle { background: var(--text-tertiary); }
+        .swarm-status-dot.waiting { background: var(--accent-amber); }
+        .swarm-status-dot.error { background: var(--accent-red); }
+        .swarm-task {
+          font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;
+          padding-left: 38px;
+        }
+        .swarm-progress {
+          padding-left: 38px;
+        }
+        .swarm-progress-bar {
+          width: 100%; height: 3px; border-radius: 2px;
+          background: rgba(255,255,255,0.06);
+        }
+        .swarm-progress-fill {
+          height: 100%; border-radius: 2px;
+          transition: width 0.6s ease;
+        }
+        .swarm-progress-fill.cyan { background: var(--accent-cyan); }
+        .swarm-progress-fill.purple { background: var(--accent-purple); }
+        .swarm-progress-fill.pink { background: var(--accent-pink); }
+        .swarm-progress-fill.green { background: var(--accent-green); }
+        .file-preview-card {
+          background: rgba(0,0,0,0.25); border: 1px solid var(--glass-border);
+          border-radius: 12px; padding: 10px 12px;
+          margin-top: 8px; display: flex; align-items: center; gap: 10px;
+        }
+        .file-preview-icon {
+          width: 36px; height: 36px; border-radius: 8px;
+          background: linear-gradient(135deg, rgba(0,212,255,0.15), rgba(168,85,247,0.15));
+          display: flex; align-items: center; justify-content: center;
+          flex-shrink: 0;
+        }
+        .file-preview-info { flex: 1; min-width: 0; }
+        .file-preview-name {
+          font-size: 12px; font-weight: 500; color: var(--text-primary);
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .file-preview-meta {
+          font-size: 10px; color: var(--text-tertiary); margin-top: 2px;
+        }
+        .file-preview-action {
+          width: 28px; height: 28px; border-radius: 6px;
+          border: 1px solid var(--glass-border); background: transparent;
+          color: var(--text-tertiary); cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+          transition: all 0.15s ease; flex-shrink: 0;
+        }
+        .file-preview-action:hover {
+          border-color: var(--accent-cyan); color: var(--accent-cyan);
+        }
+        .hidden { display: none; }
+      `}</style>
+    </aside>
+  )
+}

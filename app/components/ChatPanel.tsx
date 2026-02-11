@@ -9,9 +9,36 @@ function escapeHtml(text: string): string {
 
 function renderMarkdown(text: string): string {
   return text
-    // Code blocks: ```lang\ncode\n``` → <pre> with dark bg
-    .replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) =>
-      `<div class="chat-code-block"><div class="chat-code-header">${lang || 'code'}</div><pre class="chat-code-content">${escapeHtml(code.trim())}</pre></div>`)
+    // Code blocks: ```lang\ncode\n``` → collapsible code card
+    .replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+      const lines = code.trim().split('\n')
+      const preview = lines.slice(0, 3).map((l: string) => escapeHtml(l)).join('\n')
+      const fullCode = escapeHtml(code.trim())
+      const lineCount = lines.length
+      const id = 'code-' + Math.random().toString(36).substr(2, 9)
+      return `<div class="chat-code-card">
+        <div class="chat-code-card-header">
+          <span class="chat-code-lang">${lang || 'code'}</span>
+          <span class="chat-code-lines">${lineCount} satır</span>
+          <button class="chat-code-copy" onclick="navigator.clipboard.writeText(document.getElementById('${id}').textContent)">Kopyala</button>
+        </div>
+        <pre class="chat-code-preview"><code>${preview}${lineCount > 3 ? '\n...' : ''}</code></pre>
+        <pre class="chat-code-full" id="${id}" style="display:none"><code>${fullCode}</code></pre>
+        ${lineCount > 3 ? `<button class="chat-code-toggle" onclick="
+          var full = document.getElementById('${id}');
+          var prev = this.previousElementSibling.previousElementSibling;
+          if (full.style.display === 'none') {
+            full.style.display = 'block';
+            prev.style.display = 'none';
+            this.textContent = 'Kodu Gizle ↑';
+          } else {
+            full.style.display = 'none';
+            prev.style.display = 'block';
+            this.textContent = 'Kodu Göster ↓';
+          }
+        ">Kodu Göster ↓</button>` : ''}
+      </div>`
+    })
     // Inline code: `code` → <code>
     .replace(/`([^`]+)`/g, '<code class="chat-inline-code">$1</code>')
     // Bold: **text** → <strong>
@@ -582,30 +609,77 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
           border-color: var(--accent-cyan); color: var(--accent-cyan);
         }
         .hidden { display: none; }
-        .chat-code-block {
-          background: rgba(0,0,0,0.4);
-          border: 1px solid rgba(255,255,255,0.08);
-          border-radius: 8px;
+        .chat-code-card {
+          background: rgba(0,0,0,0.35);
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 10px;
           margin: 8px 0;
           overflow: hidden;
         }
-        .chat-code-header {
-          padding: 6px 12px;
+        .chat-code-card-header {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 12px;
           background: rgba(0,0,0,0.3);
+          border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .chat-code-lang {
+          font-size: 10px;
+          padding: 2px 8px;
+          background: var(--accent-purple);
+          color: white;
+          border-radius: 4px;
+          font-weight: 600;
+          text-transform: uppercase;
+        }
+        .chat-code-lines {
           font-size: 10px;
           color: var(--text-tertiary);
-          text-transform: uppercase;
-          font-weight: 600;
-          border-bottom: 1px solid rgba(255,255,255,0.05);
+          margin-left: auto;
         }
-        .chat-code-content {
-          padding: 12px;
+        .chat-code-copy {
+          font-size: 10px;
+          padding: 3px 8px;
+          background: rgba(255,255,255,0.05);
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 4px;
+          color: var(--text-secondary);
+          cursor: pointer;
+          transition: all 0.15s ease;
+        }
+        .chat-code-copy:hover {
+          background: rgba(255,255,255,0.1);
+          color: var(--text-primary);
+        }
+        .chat-code-preview, .chat-code-full {
           margin: 0;
+          padding: 10px 12px;
           font-family: 'SF Mono', Monaco, monospace;
-          font-size: 12px;
+          font-size: 11px;
           line-height: 1.5;
+          color: rgba(255,255,255,0.6);
           overflow-x: auto;
+        }
+        .chat-code-full {
           color: #e0e0e0;
+          max-height: 400px;
+          overflow-y: auto;
+        }
+        .chat-code-toggle {
+          display: block;
+          width: 100%;
+          padding: 6px;
+          background: rgba(0,212,255,0.05);
+          border: none;
+          border-top: 1px solid rgba(255,255,255,0.06);
+          color: var(--accent-cyan);
+          font-size: 11px;
+          cursor: pointer;
+          transition: background 0.15s ease;
+        }
+        .chat-code-toggle:hover {
+          background: rgba(0,212,255,0.1);
         }
         .chat-inline-code {
           background: rgba(255,255,255,0.08);

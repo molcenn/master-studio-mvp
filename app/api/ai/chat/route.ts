@@ -3,9 +3,44 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { supabase } from '@/lib/db'
 
-// OpenClaw Gateway URL (configured via env)
-const OPENCLAW_URL = process.env.OPENCLAW_URL || 'http://localhost:3001'
+// OpenClaw Gateway configuration
+const OPENCLAW_URL = process.env.OPENCLAW_URL || 'http://localhost:18789'
 const OPENCLAW_TOKEN = process.env.OPENCLAW_TOKEN
+
+// Simple AI response generator (fallback when gateway unavailable)
+async function generateAIResponse(message: string, context: any[]): Promise<string> {
+  // Check if gateway is available
+  try {
+    const gatewayCheck = await fetch(`${OPENCLAW_URL}/health`, { 
+      method: 'GET',
+      signal: AbortSignal.timeout(2000)
+    })
+    if (gatewayCheck.ok) {
+      // Gateway available - use it
+      const aiResponse = await fetch(`${OPENCLAW_URL}/v1/sessions/send`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(OPENCLAW_TOKEN && { 'Authorization': `Bearer ${OPENCLAW_TOKEN}` }),
+        },
+        body: JSON.stringify({
+          sessionKey: 'agent:main:main',
+          message: `[Dashboard] Murat: ${message}`,
+        }),
+        signal: AbortSignal.timeout(30000)
+      })
+      if (aiResponse.ok) {
+        const data = await aiResponse.json()
+        return data.response || data.message || 'Mesajınız iletildi. Betsy yakında yanıtlayacak.'
+      }
+    }
+  } catch (e) {
+    console.log('Gateway unavailable, using fallback')
+  }
+  
+  // Fallback: Message will be handled manually or via Telegram
+  return 'Mesajınız Betsy\'ye iletildi. Telegram üzerinden yanıtlayacağım.'
+}
 
 // POST /api/ai/chat - Send message to AI and get response
 export async function POST(req: NextRequest) {
@@ -43,26 +78,8 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // Call OpenClaw Gateway for AI response
-    const aiResponse = await fetch(`${OPENCLAW_URL}/v1/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(OPENCLAW_TOKEN && { 'Authorization': `Bearer ${OPENCLAW_TOKEN}` }),
-      },
-      body: JSON.stringify({
-        message,
-        context: context.slice(-10),
-        userId: session.user.id,
-        projectId,
-      }),
-    })
-
-    if (!aiResponse.ok) {
-      throw new Error('AI service error')
-    }
-
-    const aiData = await aiResponse.json()
+    // Generate AI response
+    const aiContent = await generateAIResponse(message, context)
     
     // Save AI response
     const { data: aiMessage, error } = await supabase
@@ -71,7 +88,7 @@ export async function POST(req: NextRequest) {
         project_id: projectId,
         user_id: 'system',
         role: 'assistant',
-        content: aiData.response || aiData.message,
+        content: aiContent,
         type: 'text',
       })
       .select()

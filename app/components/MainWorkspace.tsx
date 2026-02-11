@@ -175,6 +175,92 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
   const [newMilestone, setNewMilestone] = useState({ title: '', description: '', dueDate: '' })
   const [newTaskText, setNewTaskText] = useState<{[key: string]: string}>({})
 
+  // Agent Swarm state
+  interface SwarmTask {
+    id: string
+    task: string
+    model: string
+    status: 'running' | 'completed' | 'error'
+    createdAt: string
+    result?: string
+  }
+  const [swarmTasks, setSwarmTasks] = useState<SwarmTask[]>([])
+  const [showTaskModal, setShowTaskModal] = useState(false)
+  const [selectedAgent, setSelectedAgent] = useState<{name: string, model: string} | null>(null)
+  const [taskInput, setTaskInput] = useState('')
+  const [taskModel, setTaskModel] = useState('moonshot/kimi-k2.5')
+  const [isSpawning, setIsSpawning] = useState(false)
+
+  // Load swarm tasks from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('master-studio-swarm-tasks')
+    if (saved) {
+      try {
+        setSwarmTasks(JSON.parse(saved))
+      } catch (e) {
+        console.error('Error loading swarm tasks:', e)
+      }
+    }
+  }, [])
+
+  // Save swarm tasks to localStorage
+  useEffect(() => {
+    localStorage.setItem('master-studio-swarm-tasks', JSON.stringify(swarmTasks))
+  }, [swarmTasks])
+
+  // Spawn sub-agent task
+  const spawnTask = async () => {
+    if (!taskInput.trim()) return
+    
+    setIsSpawning(true)
+    const taskId = Date.now().toString()
+    
+    // Add to active tasks
+    const newTask: SwarmTask = {
+      id: taskId,
+      task: taskInput.slice(0, 100) + (taskInput.length > 100 ? '...' : ''),
+      model: taskModel,
+      status: 'running',
+      createdAt: new Date().toISOString()
+    }
+    setSwarmTasks(prev => [newTask, ...prev])
+    
+    try {
+      const res = await fetch('/api/ai/spawn', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task: taskInput, model: taskModel })
+      })
+      
+      const data = await res.json()
+      
+      // Update task status
+      setSwarmTasks(prev => prev.map(t => 
+        t.id === taskId 
+          ? { ...t, status: data.success ? 'completed' : 'error', result: data.response || data.error }
+          : t
+      ))
+      
+      setShowTaskModal(false)
+      setTaskInput('')
+    } catch (err: any) {
+      setSwarmTasks(prev => prev.map(t => 
+        t.id === taskId 
+          ? { ...t, status: 'error', result: err.message }
+          : t
+      ))
+    } finally {
+      setIsSpawning(false)
+    }
+  }
+
+  // Open task modal for agent
+  const openTaskModal = (agentName: string, defaultModel: string) => {
+    setSelectedAgent({ name: agentName, model: defaultModel })
+    setTaskModel(defaultModel)
+    setShowTaskModal(true)
+  }
+
   // Fetch stats and projects
   useEffect(() => {
     fetchData()
@@ -1244,9 +1330,80 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
 
         {activeView === 'agents' && (
           <div className="agents-view">
+            {/* Swarm Status Panel */}
+            <div className="swarm-panel">
+              <div className="swarm-header">
+                <div className="swarm-title">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                    <path d="M2 17l10 5 10-5"/>
+                    <path d="M2 12l10 5 10-5"/>
+                  </svg>
+                  Aktif Görevler
+                  {swarmTasks.filter(t => t.status === 'running').length > 0 && (
+                    <span className="swarm-badge">
+                      {swarmTasks.filter(t => t.status === 'running').length}
+                    </span>
+                  )}
+                </div>
+                <span className="swarm-subtitle">
+                  {swarmTasks.length} görev · {swarmTasks.filter(t => t.status === 'running').length} çalışıyor
+                </span>
+              </div>
+              
+              {swarmTasks.length === 0 ? (
+                <div className="swarm-empty">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" strokeWidth="1.5">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 8v8M8 12h8"/>
+                  </svg>
+                  <span>Henüz aktif görev yok</span>
+                </div>
+              ) : (
+                <div className="swarm-list">
+                  {swarmTasks.slice(0, 5).map((task) => (
+                    <div key={task.id} className={`swarm-task ${task.status}`}>
+                      <div className="swarm-task-icon">
+                        {task.status === 'running' && (
+                          <svg className="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/>
+                          </svg>
+                        )}
+                        {task.status === 'completed' && (
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2">
+                            <polyline points="20 6 9 17 4 12"/>
+                          </svg>
+                        )}
+                        {task.status === 'error' && (
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="15" y1="9" x2="9" y2="15"/>
+                            <line x1="9" y1="9" x2="15" y2="15"/>
+                          </svg>
+                        )}
+                      </div>
+                      <div className="swarm-task-info">
+                        <div className="swarm-task-name">{task.task}</div>
+                        <div className="swarm-task-meta">
+                          <span className="swarm-task-model">{task.model.split('/').pop()}</span>
+                          <span className={`swarm-task-status ${task.status}`}>
+                            {task.status === 'running' ? 'Çalışıyor' : task.status === 'completed' ? 'Tamamlandı' : 'Hata'}
+                          </span>
+                          <span className="swarm-task-time">{timeAgo(task.createdAt)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {swarmTasks.length > 5 && (
+                    <div className="swarm-more">+{swarmTasks.length - 5} görev daha</div>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div className="section-header">
               <span className="section-title">AI Agent'larım</span>
-              <button className="section-action">Yenile ↻</button>
+              <button className="section-action" onClick={() => setSwarmTasks([])}>Geçmişi Temizle</button>
             </div>
             <div className="agents-grid">
               {/* Kimi K2.5 */}
@@ -1260,6 +1417,13 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                   <span className="agent-status-badge active">Aktif</span>
                 </div>
                 <div className="agent-description">Günlük görevler, hızlı yanıt, genel amaçlı üretim</div>
+                <button className="agent-task-btn" onClick={() => openTaskModal('Kimi K2.5', 'moonshot/kimi-k2.5')}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="12" y1="5" x2="12" y2="19"/>
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                  </svg>
+                  Görev Ver
+                </button>
               </div>
 
               {/* Claude Opus */}
@@ -1273,6 +1437,13 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                   <span className="agent-status-badge pending">Beklemede</span>
                 </div>
                 <div className="agent-description">Kod review, mimari kararlar, karmaşık analizler</div>
+                <button className="agent-task-btn" onClick={() => openTaskModal('Claude Opus', 'anthropic/claude-opus-4')}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="12" y1="5" x2="12" y2="19"/>
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                  </svg>
+                  Görev Ver
+                </button>
               </div>
 
               {/* Claude Sonnet */}
@@ -1286,6 +1457,13 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                   <span className="agent-status-badge pending">Beklemede</span>
                 </div>
                 <div className="agent-description">Component yazma, UI geliştirme, tasarım işleri</div>
+                <button className="agent-task-btn" onClick={() => openTaskModal('Claude Sonnet', 'anthropic/claude-sonnet-4')}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="12" y1="5" x2="12" y2="19"/>
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                  </svg>
+                  Görev Ver
+                </button>
               </div>
 
               {/* DALL-E */}
@@ -1299,8 +1477,84 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                   <span className="agent-status-badge pending">Beklemede</span>
                 </div>
                 <div className="agent-description">Image generation, görsel içerik üretimi</div>
+                <button className="agent-task-btn" onClick={() => openTaskModal('DALL-E', 'openai/dall-e-3')}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="12" y1="5" x2="12" y2="19"/>
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                  </svg>
+                  Görev Ver
+                </button>
               </div>
             </div>
+
+            {/* Task Modal */}
+            {showTaskModal && (
+              <div className="modal-overlay" onClick={() => setShowTaskModal(false)}>
+                <div className="task-modal" onClick={(e) => e.stopPropagation()}>
+                  <div className="task-modal-header">
+                    <h3 className="task-modal-title">
+                      <span className="task-modal-agent">{selectedAgent?.name}</span>'e Görev Ver
+                    </h3>
+                    <button className="task-modal-close" onClick={() => setShowTaskModal(false)}>✕</button>
+                  </div>
+                  
+                  <div className="task-modal-body">
+                    <div className="task-field">
+                      <label className="task-label">Görev Açıklaması</label>
+                      <textarea
+                        className="task-textarea"
+                        placeholder="Örn: Bu projedeki tüm API endpoint'lerini kontrol et ve dökümantasyonunu oluştur..."
+                        value={taskInput}
+                        onChange={(e) => setTaskInput(e.target.value)}
+                        rows={4}
+                        autoFocus
+                      />
+                    </div>
+                    
+                    <div className="task-field">
+                      <label className="task-label">Model</label>
+                      <select 
+                        className="task-select"
+                        value={taskModel}
+                        onChange={(e) => setTaskModel(e.target.value)}
+                      >
+                        <option value="moonshot/kimi-k2.5">Kimi K2.5 (Hızlı)</option>
+                        <option value="anthropic/claude-sonnet-4">Claude Sonnet 4.5 (Kod)</option>
+                        <option value="anthropic/claude-opus-4">Claude Opus 4.6 (Derin)</option>
+                        <option value="openai/gpt-4o">GPT-4o</option>
+                      </select>
+                    </div>
+                  </div>
+                  
+                  <div className="task-modal-actions">
+                    <button className="task-btn secondary" onClick={() => setShowTaskModal(false)} disabled={isSpawning}>
+                      İptal
+                    </button>
+                    <button 
+                      className="task-btn primary" 
+                      onClick={spawnTask}
+                      disabled={!taskInput.trim() || isSpawning}
+                    >
+                      {isSpawning ? (
+                        <>
+                          <svg className="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/>
+                          </svg>
+                          Başlatılıyor...
+                        </>
+                      ) : (
+                        <>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <polygon points="5 3 19 12 5 21 5 3"/>
+                          </svg>
+                          Başlat
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -2629,6 +2883,289 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
           .filter-btn { flex: 1; }
           .review-card-actions { flex-direction: column; }
           .review-btn { width: 100%; justify-content: center; }
+        }
+
+        /* Swarm Panel Styles */
+        .swarm-panel {
+          background: rgba(0,0,0,0.2);
+          border: 1px solid var(--glass-border);
+          border-radius: 16px;
+          padding: 20px;
+          margin-bottom: 24px;
+        }
+        .swarm-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 16px;
+        }
+        .swarm-title {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-size: 15px;
+          font-weight: 600;
+          color: var(--text-primary);
+        }
+        .swarm-title svg {
+          color: var(--accent-cyan);
+        }
+        .swarm-badge {
+          background: var(--accent-cyan);
+          color: #000;
+          font-size: 11px;
+          padding: 2px 8px;
+          border-radius: 10px;
+          font-weight: 700;
+        }
+        .swarm-subtitle {
+          font-size: 12px;
+          color: var(--text-tertiary);
+        }
+        .swarm-empty {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          padding: 32px;
+          color: var(--text-tertiary);
+          font-size: 13px;
+        }
+        .swarm-list {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        .swarm-task {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 12px 14px;
+          background: rgba(255,255,255,0.03);
+          border: 1px solid var(--glass-border);
+          border-radius: 10px;
+          transition: all 0.15s ease;
+        }
+        .swarm-task:hover {
+          background: rgba(255,255,255,0.05);
+          border-color: var(--glass-border-hover);
+        }
+        .swarm-task.running {
+          border-color: var(--accent-cyan);
+          background: rgba(0,212,255,0.05);
+        }
+        .swarm-task.completed {
+          border-color: rgba(34,197,94,0.3);
+        }
+        .swarm-task.error {
+          border-color: rgba(239,68,68,0.3);
+        }
+        .swarm-task-icon {
+          width: 32px;
+          height: 32px;
+          border-radius: 8px;
+          background: rgba(0,0,0,0.3);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+        .swarm-task-info {
+          flex: 1;
+          min-width: 0;
+        }
+        .swarm-task-name {
+          font-size: 13px;
+          font-weight: 500;
+          color: var(--text-primary);
+          margin-bottom: 4px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .swarm-task-meta {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-size: 11px;
+        }
+        .swarm-task-model {
+          color: var(--accent-purple);
+          font-weight: 500;
+        }
+        .swarm-task-status {
+          padding: 2px 8px;
+          border-radius: 6px;
+          font-weight: 600;
+          text-transform: uppercase;
+          font-size: 9px;
+        }
+        .swarm-task-status.running {
+          background: rgba(0,212,255,0.15);
+          color: var(--accent-cyan);
+        }
+        .swarm-task-status.completed {
+          background: rgba(34,197,94,0.15);
+          color: var(--accent-green);
+        }
+        .swarm-task-status.error {
+          background: rgba(239,68,68,0.15);
+          color: var(--accent-red);
+        }
+        .swarm-task-time {
+          color: var(--text-tertiary);
+        }
+        .swarm-more {
+          text-align: center;
+          font-size: 12px;
+          color: var(--text-tertiary);
+          padding: 8px;
+        }
+
+        /* Agent Task Button */
+        .agent-task-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          width: 100%;
+          padding: 10px;
+          margin-top: 12px;
+          background: rgba(0,212,255,0.1);
+          border: 1px solid var(--glass-border);
+          border-radius: 8px;
+          color: var(--accent-cyan);
+          font-size: 13px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+        .agent-task-btn:hover {
+          background: rgba(0,212,255,0.2);
+          border-color: var(--accent-cyan);
+        }
+
+        /* Task Modal Styles */
+        .task-modal {
+          background: var(--glass-bg);
+          backdrop-filter: var(--glass-blur);
+          -webkit-backdrop-filter: var(--glass-blur);
+          border: 1px solid var(--glass-border);
+          border-radius: 16px;
+          max-width: 500px;
+          width: 90%;
+          animation: slideUp 0.2s ease;
+        }
+        .task-modal-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 20px 20px 0;
+        }
+        .task-modal-title {
+          font-size: 16px;
+          font-weight: 600;
+          margin: 0;
+          color: var(--text-primary);
+        }
+        .task-modal-agent {
+          color: var(--accent-cyan);
+        }
+        .task-modal-close {
+          background: none;
+          border: none;
+          color: var(--text-tertiary);
+          font-size: 18px;
+          cursor: pointer;
+          padding: 4px;
+          transition: color 0.2s ease;
+        }
+        .task-modal-close:hover {
+          color: var(--text-primary);
+        }
+        .task-modal-body {
+          padding: 20px;
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+        .task-field {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .task-label {
+          font-size: 12px;
+          font-weight: 600;
+          color: var(--text-secondary);
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        .task-textarea {
+          background: rgba(0,0,0,0.3);
+          border: 1px solid var(--glass-border);
+          border-radius: 10px;
+          padding: 12px 14px;
+          color: var(--text-primary);
+          font-size: 14px;
+          font-family: inherit;
+          resize: vertical;
+          min-height: 100px;
+          outline: none;
+        }
+        .task-textarea:focus {
+          border-color: var(--accent-cyan);
+        }
+        .task-select {
+          background: rgba(0,0,0,0.3);
+          border: 1px solid var(--glass-border);
+          border-radius: 10px;
+          padding: 12px 14px;
+          color: var(--text-primary);
+          font-size: 14px;
+          outline: none;
+          cursor: pointer;
+        }
+        .task-select:focus {
+          border-color: var(--accent-cyan);
+        }
+        .task-modal-actions {
+          display: flex;
+          gap: 12px;
+          padding: 0 20px 20px;
+          justify-content: flex-end;
+        }
+        .task-btn {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 20px;
+          border-radius: 8px;
+          font-size: 13px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          border: none;
+        }
+        .task-btn.secondary {
+          background: rgba(255,255,255,0.05);
+          color: var(--text-secondary);
+          border: 1px solid var(--glass-border);
+        }
+        .task-btn.secondary:hover:not(:disabled) {
+          background: rgba(255,255,255,0.1);
+        }
+        .task-btn.primary {
+          background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+          color: white;
+        }
+        .task-btn.primary:hover:not(:disabled) {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(0, 212, 255, 0.3);
+        }
+        .task-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
         }
       `}</style>
     </main>

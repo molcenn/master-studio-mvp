@@ -37,7 +37,7 @@ export default function Dashboard() {
         setActiveProject={setActiveProject}
         user={session.user}
       />
-      <MainWorkspace />
+      <MainWorkspace activeProject={activeProject} />
       <ChatPanel projectId={activeProject} />
     </div>
   )

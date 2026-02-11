@@ -1,12 +1,150 @@
 'use client'
 
-export default function MainWorkspace() {
+import { useState, useEffect } from 'react'
+
+interface Project {
+  id: string
+  name: string
+  created_at: string
+  messages?: { count: number }[]
+}
+
+interface Stats {
+  projectCount: number
+  activeAgents: number
+  pendingReviews: number
+  todayMessageCount: number
+  fileCount: number
+}
+
+interface MainWorkspaceProps {
+  activeProject: string
+}
+
+const PROJECT_COLORS = ['#00d4ff', '#a855f7', '#ec4899', '#22c55e', '#f59e0b', '#ef4444', '#3b82f6']
+const STATUS_VARIANTS = ['Aktif', 'Review', 'Planlama'] as const
+
+function getProjectColor(index: number) {
+  return PROJECT_COLORS[index % PROJECT_COLORS.length]
+}
+
+function getInitials(name: string) {
+  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+}
+
+function getStatusFromIndex(index: number) {
+  return STATUS_VARIANTS[index % STATUS_VARIANTS.length]
+}
+
+function getStatusClass(status: string) {
+  switch (status) {
+    case 'Aktif': return 'status-active'
+    case 'Review': return 'status-review'
+    case 'Planlama': return 'status-planning'
+    default: return 'status-active'
+  }
+}
+
+function getProgressFromStatus(status: string) {
+  switch (status) {
+    case 'Aktif': return 75
+    case 'Review': return 90
+    case 'Planlama': return 25
+    default: return 50
+  }
+}
+
+function timeAgo(date: string) {
+  const now = new Date()
+  const past = new Date(date)
+  const diffMs = now.getTime() - past.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMs / 3600000)
+  const diffDays = Math.floor(diffMs / 86400000)
+
+  if (diffMins < 60) return `${diffMins} dk önce`
+  if (diffHours < 24) return `${diffHours} saat önce`
+  if (diffDays === 1) return '1 gün önce'
+  return `${diffDays} gün önce`
+}
+
+export default function MainWorkspace({ activeProject }: MainWorkspaceProps) {
+  const [stats, setStats] = useState<Stats | null>(null)
+  const [projects, setProjects] = useState<Project[]>([])
+  const [activeProjectData, setActiveProjectData] = useState<Project | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  // Fetch stats and projects
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  // Fetch active project data when changed
+  useEffect(() => {
+    if (activeProject) {
+      fetchActiveProject()
+    }
+  }, [activeProject])
+
+  const fetchData = async () => {
+    try {
+      const [statsRes, projectsRes] = await Promise.all([
+        fetch('/api/stats'),
+        fetch('/api/projects')
+      ])
+
+      if (statsRes.ok) {
+        const statsData = await statsRes.json()
+        setStats(statsData.stats)
+        setProjects(statsData.recentProjects || [])
+      }
+
+      if (projectsRes.ok) {
+        const projectsData = await projectsRes.json()
+        // Merge with recent projects if needed
+        if (projectsData.projects?.length > 0) {
+          setProjects(prev => {
+            const existingIds = new Set(prev.map(p => p.id))
+            const newProjects = projectsData.projects.filter((p: Project) => !existingIds.has(p.id))
+            return [...prev, ...newProjects].slice(0, 6)
+          })
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching dashboard data:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchActiveProject = async () => {
+    try {
+      const res = await fetch(`/api/projects/${activeProject}`)
+      if (res.ok) {
+        const data = await res.json()
+        setActiveProjectData(data.project)
+      }
+    } catch (err) {
+      console.error('Error fetching active project:', err)
+    }
+  }
+
+  // Get active project display data
+  const displayProject = activeProjectData || projects.find(p => p.id === activeProject)
+
   return (
     <main className="panel main" style={{ position: 'relative', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <div className="main-header">
         <div className="main-header-left">
-          <span className="panel-title">Dashboard</span>
+          <span className="panel-title">
+            {displayProject ? displayProject.name : 'Dashboard'}
+          </span>
+          {displayProject && (
+            <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
+              {new Date(displayProject.created_at).toLocaleDateString('tr-TR')}
+            </span>
+          )}
         </div>
         <div className="toolbar-btns">
           <button className="toolbar-btn" title="Search (⌘K)">
@@ -26,152 +164,121 @@ export default function MainWorkspace() {
 
       {/* Dashboard Content */}
       <div className="today-view">
-        {/* Welcome */}
-        <div className="welcome-section">
-          <div className="welcome-greeting">Günaydın, <span>Murat</span> ✦</div>
-          <div className="welcome-summary">5 aktif proje · 4 agent çalışıyor · 3 review bekliyor</div>
-        </div>
+        {loading ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px', color: 'var(--text-tertiary)' }}>
+            Yükleniyor...
+          </div>
+        ) : (
+          <>
+            {/* Welcome */}
+            <div className="welcome-section">
+              <div className="welcome-greeting">Günaydın, <span>Murat</span> ✦</div>
+              <div className="welcome-summary">
+                {stats?.projectCount || 0} aktif proje · {stats?.activeAgents || 0} agent çalışıyor · {stats?.pendingReviews || 0} review bekliyor
+              </div>
+            </div>
 
-        {/* Stats */}
-        <div className="stats-row">
-          <div className="stat-card">
-            <div className="stat-value gradient">5</div>
-            <div className="stat-label">Aktif Proje</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-value" style={{ color: 'var(--accent-green)' }}>4</div>
-            <div className="stat-label">Çalışan Agent</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-value" style={{ color: 'var(--accent-amber)' }}>3</div>
-            <div className="stat-label">Bekleyen Review</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-value" style={{ color: 'var(--accent-cyan)' }}>12</div>
-            <div className="stat-label">Bugün Tamamlanan</div>
-          </div>
-        </div>
+            {/* Stats */}
+            <div className="stats-row">
+              <div className="stat-card">
+                <div className="stat-value gradient">{stats?.projectCount || 0}</div>
+                <div className="stat-label">Aktif Proje</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-value" style={{ color: 'var(--accent-green)' }}>{stats?.activeAgents || 0}</div>
+                <div className="stat-label">Çalışan Agent</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-value" style={{ color: 'var(--accent-amber)' }}>{stats?.pendingReviews || 0}</div>
+                <div className="stat-label">Bekleyen Review</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-value" style={{ color: 'var(--accent-cyan)' }}>{stats?.todayMessageCount || 0}</div>
+                <div className="stat-label">Bugünkü Mesaj</div>
+              </div>
+            </div>
 
-        {/* Active Projects */}
-        <div className="section-header">
-          <span className="section-title">Aktif Projeler</span>
-          <button className="section-action">Tümünü Gör →</button>
-        </div>
-        <div className="project-cards">
-          <div className="project-card">
-            <div className="project-card-header">
-              <div>
-                <div className="project-card-name">AI Agent Dashboard</div>
-                <div className="project-card-client">Master Studio</div>
-              </div>
-              <span className="project-card-status status-active">Aktif</span>
+            {/* Active Projects */}
+            <div className="section-header">
+              <span className="section-title">Aktif Projeler</span>
+              <button className="section-action">Tümünü Gör →</button>
             </div>
-            <div className="project-card-progress">
-              <div className="progress-bar-bg">
-                <div className="progress-bar-fill" style={{ width: '75%' }}></div>
-              </div>
-              <div className="progress-label">
-                <span className="progress-text">Progress</span>
-                <span className="progress-text">75%</span>
-              </div>
+            <div className="project-cards">
+              {projects.slice(0, 3).map((project, index) => {
+                const status = getStatusFromIndex(index)
+                const progress = getProgressFromStatus(status)
+                const messageCount = project.messages?.[0]?.count || 0
+                return (
+                  <div 
+                    key={project.id} 
+                    className={`project-card ${activeProject === project.id ? 'active' : ''}`}
+                  >
+                    <div className="project-card-header">
+                      <div>
+                        <div className="project-card-name">{project.name}</div>
+                        <div className="project-card-client">{messageCount} mesaj</div>
+                      </div>
+                      <span className={`project-card-status ${getStatusClass(status)}`}>{status}</span>
+                    </div>
+                    <div className="project-card-progress">
+                      <div className="progress-bar-bg">
+                        <div className="progress-bar-fill" style={{ width: `${progress}%` }}></div>
+                      </div>
+                      <div className="progress-label">
+                        <span className="progress-text">Progress</span>
+                        <span className="progress-text">{progress}%</span>
+                      </div>
+                    </div>
+                    <div className="project-card-footer">
+                      <div className="agent-avatars">
+                        <div className="agent-avatar cyan" style={{ background: getProjectColor(index) }}>
+                          {getInitials(project.name)}
+                        </div>
+                      </div>
+                      <span className="project-card-time">{timeAgo(project.created_at)}</span>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
-            <div className="project-card-footer">
-              <div className="agent-avatars">
-                <div className="agent-avatar cyan">K</div>
-                <div className="agent-avatar purple">C</div>
-                <div className="agent-avatar pink">D</div>
-              </div>
-              <span className="project-card-time">2 saat önce</span>
-            </div>
-          </div>
 
-          <div className="project-card">
-            <div className="project-card-header">
-              <div>
-                <div className="project-card-name">Lansman Videosu</div>
-                <div className="project-card-client">Ölçen Organizasyon</div>
-              </div>
-              <span className="project-card-status status-review">Review</span>
+            {/* Review Queue */}
+            <div className="section-header">
+              <span className="section-title">Bekleyen Review'lar</span>
+              <button className="section-action">Tümünü Gör →</button>
             </div>
-            <div className="project-card-progress">
-              <div className="progress-bar-bg">
-                <div className="progress-bar-fill" style={{ width: '90%' }}></div>
+            <div className="review-list">
+              <div className="review-item">
+                <div className="review-icon code">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="2">
+                    <polyline points="16 18 22 12 16 6"/>
+                    <polyline points="8 6 2 12 8 18"/>
+                  </svg>
+                </div>
+                <div className="review-info">
+                  <div className="review-title">API endpoint refactoring</div>
+                  <div className="review-meta">coding-agent · Agent Dashboard · 10 dk önce</div>
+                </div>
+                <span className="review-priority priority-urgent">Acil</span>
               </div>
-              <div className="progress-label">
-                <span className="progress-text">Progress</span>
-                <span className="progress-text">90%</span>
-              </div>
-            </div>
-            <div className="project-card-footer">
-              <div className="agent-avatars">
-                <div className="agent-avatar pink">V</div>
-                <div className="agent-avatar green">A</div>
-              </div>
-              <span className="project-card-time">5 saat önce</span>
-            </div>
-          </div>
 
-          <div className="project-card">
-            <div className="project-card-header">
-              <div>
-                <div className="project-card-name">Deneyim Merkezi UI</div>
-                <div className="project-card-client">Client X</div>
-              </div>
-              <span className="project-card-status status-planning">Planlama</span>
-            </div>
-            <div className="project-card-progress">
-              <div className="progress-bar-bg">
-                <div className="progress-bar-fill" style={{ width: '25%' }}></div>
-              </div>
-              <div className="progress-label">
-                <span className="progress-text">Progress</span>
-                <span className="progress-text">25%</span>
+              <div className="review-item">
+                <div className="review-icon asset">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00d4ff" strokeWidth="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                    <path d="M21 15l-5-5L5 21"/>
+                  </svg>
+                </div>
+                <div className="review-info">
+                  <div className="review-title">Hero image generation v3</div>
+                  <div className="review-meta">dalle-agent · Lansman Videosu · 1 saat önce</div>
+                </div>
+                <span className="review-priority priority-normal">Normal</span>
               </div>
             </div>
-            <div className="project-card-footer">
-              <div className="agent-avatars">
-                <div className="agent-avatar cyan">K</div>
-              </div>
-              <span className="project-card-time">1 gün önce</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Review Queue */}
-        <div className="section-header">
-          <span className="section-title">Bekleyen Review'lar</span>
-          <button className="section-action">Tümünü Gör →</button>
-        </div>
-        <div className="review-list">
-          <div className="review-item">
-            <div className="review-icon code">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="2">
-                <polyline points="16 18 22 12 16 6"/>
-                <polyline points="8 6 2 12 8 18"/>
-              </svg>
-            </div>
-            <div className="review-info">
-              <div className="review-title">API endpoint refactoring</div>
-              <div className="review-meta">coding-agent · Agent Dashboard · 10 dk önce</div>
-            </div>
-            <span className="review-priority priority-urgent">Acil</span>
-          </div>
-
-          <div className="review-item">
-            <div className="review-icon asset">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00d4ff" strokeWidth="2">
-                <rect x="3" y="3" width="18" height="18" rx="2"/>
-                <circle cx="8.5" cy="8.5" r="1.5"/>
-                <path d="M21 15l-5-5L5 21"/>
-              </svg>
-            </div>
-            <div className="review-info">
-              <div className="review-title">Hero image generation v3</div>
-              <div className="review-meta">dalle-agent · Lansman Videosu · 1 saat önce</div>
-            </div>
-            <span className="review-priority priority-normal">Normal</span>
-          </div>
-        </div>
+          </>
+        )}
       </div>
 
       <style jsx>{`
@@ -235,6 +342,7 @@ export default function MainWorkspace() {
           cursor: pointer; transition: all 0.2s ease;
         }
         .project-card:hover { border-color: var(--glass-border-hover); background: rgba(0,0,0,0.3); transform: translateY(-1px); }
+        .project-card.active { border-color: var(--accent-cyan); background: rgba(0,212,255,0.05); }
         .project-card-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
         .project-card-name { font-size: 14px; font-weight: 600; }
         .project-card-client { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }

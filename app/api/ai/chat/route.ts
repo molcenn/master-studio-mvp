@@ -20,6 +20,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
+  // Default user UUID for single-user mode
+  const USER_UUID = '00000000-0000-0000-0000-000000000002'
+  const SYSTEM_UUID = '00000000-0000-0000-0000-000000000099'
+
   // Save user message
   let userMessage
   try {
@@ -27,7 +31,7 @@ export async function POST(req: NextRequest) {
       .from('messages')
       .insert({
         project_id: projectId,
-        user_id: session.user.id,
+        user_id: USER_UUID,
         role: 'user',
         content: message,
         type: 'text',
@@ -82,7 +86,7 @@ export async function POST(req: NextRequest) {
       .from('messages')
       .insert({
         project_id: projectId,
-        user_id: 'system',
+        user_id: SYSTEM_UUID,
         role: 'assistant',
         content: aiContent,
         type: 'text',
@@ -103,7 +107,7 @@ export async function POST(req: NextRequest) {
       .from('messages')
       .insert({
         project_id: projectId,
-        user_id: 'system',
+        user_id: SYSTEM_UUID,
         role: 'assistant',
         content: 'Bağlantı hatası. Lütfen tekrar deneyin.',
         type: 'text',

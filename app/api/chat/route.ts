@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
       .from('messages')
       .insert({
         project_id: projectId,
-        user_id: session.user.id,
+        user_id: '00000000-0000-0000-0000-000000000002',
         role,
         content,
         type,

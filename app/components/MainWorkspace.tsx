@@ -132,6 +132,14 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // IDE view state
+  const [ideTab, setIdeTab] = useState<'code' | 'preview' | 'details'>('code')
+  const [codeBlocks, setCodeBlocks] = useState<{lang: string, code: string}[]>([])
+  const [selectedBlock, setSelectedBlock] = useState(0)
+  const [copied, setCopied] = useState(false)
+  const [previewKey, setPreviewKey] = useState(0)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+
   // Fetch stats and projects
   useEffect(() => {
     fetchData()
@@ -148,8 +156,16 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
   useEffect(() => {
     if (activeView === 'workspace') {
       fetchRecentMessages()
+      fetchCodeBlocks()
     }
   }, [activeView, activeProject])
+
+  // Auto-refresh code blocks every 5s in workspace
+  useEffect(() => {
+    if (activeView !== 'workspace' || ideTab === 'details') return
+    const iv = setInterval(fetchCodeBlocks, 5000)
+    return () => clearInterval(iv)
+  }, [activeView, ideTab, activeProject])
 
   // Fetch files when viewing files tab
   useEffect(() => {
@@ -255,6 +271,28 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
     } finally {
       setIsDeleting(false)
     }
+  }
+
+  const fetchCodeBlocks = async () => {
+    if (!activeProject) return
+    try {
+      const res = await fetch(`/api/chat?projectId=${activeProject}`)
+      if (!res.ok) return
+      const data = await res.json()
+      const msgs = (data.messages || []).filter((m: Message) => m.role === 'assistant' || m.role === 'agent')
+      const blocks: {lang: string, code: string}[] = []
+      const regex = /```(\w*)\n([\s\S]*?)```/g
+      // Check last 5 agent messages
+      for (const msg of [...msgs].reverse().slice(0, 5)) {
+        let match
+        while ((match = regex.exec(msg.content)) !== null) {
+          blocks.push({ lang: match[1].trim() || 'text', code: match[2].trim() })
+        }
+        regex.lastIndex = 0
+      }
+      setCodeBlocks(blocks)
+      if (blocks.length > 0 && selectedBlock >= blocks.length) setSelectedBlock(0)
+    } catch (err) { console.error('Error fetching code blocks:', err) }
   }
 
   const fetchFiles = async () => {
@@ -493,149 +531,193 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                 description="Bir proje seçin"
               />
             ) : (
-              <div className="workspace-detail">
-                {/* Project Header */}
-                <div className="workspace-header">
-                  {isEditingName ? (
-                    <div className="name-edit">
-                      <input
-                        type="text"
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') updateProjectName()
-                          if (e.key === 'Escape') {
-                            setIsEditingName(false)
-                            setEditName(activeProjectData?.name || '')
-                          }
-                        }}
-                        onBlur={() => {
-                          if (editName.trim() !== activeProjectData?.name) {
-                            updateProjectName()
-                          } else {
-                            setIsEditingName(false)
-                          }
-                        }}
-                        autoFocus
-                        className="name-input"
-                      />
-                      {isSaving && <span className="saving-indicator">Kaydediliyor...</span>}
-                    </div>
-                  ) : (
-                    <h1 
-                      className="project-title"
-                      onClick={() => {
-                        setEditName(activeProjectData?.name || '')
-                        setIsEditingName(true)
-                      }}
-                      title="Düzenlemek için tıklayın"
-                    >
-                      {activeProjectData?.name || 'Yükleniyor...'}
-                      <svg className="edit-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                      </svg>
-                    </h1>
-                  )}
-                  
-                  {/* Project Meta */}
-                  <div className="project-meta">
-                    <span className="meta-item">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-                        <line x1="16" y1="2" x2="16" y2="6"/>
-                        <line x1="8" y1="2" x2="8" y2="6"/>
-                        <line x1="3" y1="10" x2="21" y2="10"/>
-                      </svg>
-                      {activeProjectData?.created_at 
-                        ? new Date(activeProjectData.created_at).toLocaleDateString('tr-TR', { 
-                            day: 'numeric', 
-                            month: 'long', 
-                            year: 'numeric' 
-                          })
-                        : '-'
-                      }
-                    </span>
-                    <span className="meta-item">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                      </svg>
-                      {activeProjectData?.messages?.[0]?.count || 0} mesaj
-                    </span>
-                  </div>
-                </div>
-
-                {/* Quick Actions */}
-                <div className="quick-actions">
-                  <button 
-                    className="action-btn primary"
-                    onClick={() => setActiveView('dashboard')}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              <div className="ide-container">
+                {/* IDE Tab Bar */}
+                <div className="ide-tabs">
+                  <button className={`ide-tab ${ideTab === 'code' ? 'active' : ''}`} onClick={() => setIdeTab('code')}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
                     </svg>
-                    Chat'e Git
+                    Code
+                    {codeBlocks.length > 0 && <span className="ide-badge">{codeBlocks.length}</span>}
                   </button>
-                  <button 
-                    className="action-btn secondary"
-                    onClick={() => setActiveView('files')}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
-                      <polyline points="14 2 14 8 20 8"/>
+                  <button className={`ide-tab ${ideTab === 'preview' ? 'active' : ''}`} onClick={() => setIdeTab('preview')}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
                     </svg>
-                    Dosyalar
+                    Preview
                   </button>
-                  <button 
-                    className="action-btn danger"
-                    onClick={() => setShowDeleteModal(true)}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="3 6 5 6 21 6"/>
-                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                  <button className={`ide-tab ${ideTab === 'details' ? 'active' : ''}`} onClick={() => setIdeTab('details')}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06"/>
                     </svg>
-                    Projeyi Sil
+                    Details
                   </button>
                 </div>
 
-                {/* Recent Messages */}
-                <div className="messages-section">
-                  <h3 className="section-heading">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                    </svg>
-                    Son Mesajlar
-                  </h3>
-                  {recentMessages.length === 0 ? (
-                    <div className="no-messages">Henüz mesaj yok</div>
-                  ) : (
-                    <div className="messages-list">
-                      {recentMessages.map((msg) => (
-                        <div key={msg.id} className={`message-item ${msg.role}`}>
-                          <div className="message-avatar">
-                            {msg.role === 'user' ? 'U' : 'AI'}
+                {/* CODE TAB */}
+                {ideTab === 'code' && (
+                  <div className="ide-code-panel">
+                    {codeBlocks.length === 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '12px', color: 'var(--text-tertiary)' }}>
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+                        </svg>
+                        <div style={{ fontSize: '14px', fontWeight: 500 }}>Agent henüz kod üretmedi</div>
+                        <div style={{ fontSize: '12px' }}>Chat'ten bir şey isteyin</div>
+                      </div>
+                    ) : (
+                      <>
+                        {codeBlocks.length > 1 && (
+                          <div className="code-selector">
+                            {codeBlocks.map((b, i) => (
+                              <button key={i} className={`code-sel-btn ${selectedBlock === i ? 'active' : ''}`} onClick={() => setSelectedBlock(i)}>
+                                <span className="lang-tag">{b.lang}</span>
+                                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', fontFamily: 'monospace' }}>{b.code.slice(0, 25)}...</span>
+                              </button>
+                            ))}
                           </div>
-                          <div className="message-content">
-                            <div className="message-header">
-                              <span className="message-role">
-                                {msg.role === 'user' ? 'Kullanıcı' : 'AI'}
-                              </span>
-                              <span className="message-time">
-                                {timeAgo(msg.created_at)}
-                              </span>
+                        )}
+                        {codeBlocks[selectedBlock] && (
+                          <div className="code-display">
+                            <div className="code-toolbar">
+                              <span className="lang-tag">{codeBlocks[selectedBlock].lang}</span>
+                              <button className="code-copy-btn" onClick={async () => {
+                                await navigator.clipboard.writeText(codeBlocks[selectedBlock].code)
+                                setCopied(true); setTimeout(() => setCopied(false), 2000)
+                              }}>
+                                {copied ? '✓ Kopyalandı' : 'Kopyala'}
+                              </button>
                             </div>
-                            <p className="message-text">
-                              {msg.content.length > 120 
-                                ? msg.content.slice(0, 120) + '...' 
-                                : msg.content
-                              }
-                            </p>
+                            <pre className="code-pre"><code>{codeBlocks[selectedBlock].code}</code></pre>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* PREVIEW TAB */}
+                {ideTab === 'preview' && (() => {
+                  const htmlBlock = codeBlocks.find(b => b.lang === 'html' || b.lang === 'htm')
+                  const cssBlock = codeBlocks.find(b => b.lang === 'css')
+                  const jsBlock = codeBlocks.find(b => b.lang === 'javascript' || b.lang === 'js')
+                  let previewHTML = ''
+                  if (htmlBlock) {
+                    previewHTML = htmlBlock.code
+                    if (cssBlock) previewHTML = previewHTML.replace('</head>', `<style>${cssBlock.code}</style></head>`)
+                    if (jsBlock) previewHTML = previewHTML.replace('</body>', `<script>${jsBlock.code}<\/script></body>`)
+                    if (!previewHTML.includes('<html') && !previewHTML.includes('<!DOCTYPE')) {
+                      previewHTML = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${cssBlock?.code || ''}</style></head><body>${previewHTML}<script>${jsBlock?.code || ''}<\/script></body></html>`
+                    }
+                  }
+                  return (
+                    <div className="ide-preview-panel">
+                      {!previewHTML ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '12px', color: 'var(--text-tertiary)' }}>
+                          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                            <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+                          </svg>
+                          <div style={{ fontSize: '14px', fontWeight: 500 }}>Önizleme için HTML kodu gerekli</div>
+                          <div style={{ fontSize: '12px' }}>Agent'tan HTML/CSS kodu isteyin</div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="preview-toolbar">
+                            <button className="preview-action-btn" onClick={() => setPreviewKey(k => k + 1)}>↻ Yenile</button>
+                            <button className="preview-action-btn" onClick={() => setIsFullscreen(true)}>⛶ Tam Ekran</button>
+                          </div>
+                          <div className="preview-frame-wrap">
+                            <iframe key={previewKey} srcDoc={previewHTML} sandbox="allow-scripts" className="preview-iframe" title="Preview" />
+                          </div>
+                        </>
+                      )}
+                      {isFullscreen && (
+                        <div className="fullscreen-overlay" onClick={() => setIsFullscreen(false)}>
+                          <div className="fullscreen-box" onClick={e => e.stopPropagation()}>
+                            <div className="fullscreen-bar">
+                              <span>Preview — {activeProjectData?.name}</span>
+                              <button onClick={() => setIsFullscreen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '18px' }}>✕</button>
+                            </div>
+                            <iframe srcDoc={previewHTML} sandbox="allow-scripts" style={{ flex: 1, width: '100%', border: 'none', background: 'white' }} title="Preview Fullscreen" />
                           </div>
                         </div>
-                      ))}
+                      )}
                     </div>
-                  )}
-                </div>
+                  )
+                })()}
+
+                {/* DETAILS TAB */}
+                {ideTab === 'details' && (
+                  <div className="workspace-detail" style={{ padding: '20px', overflow: 'auto' }}>
+                    <div className="workspace-header">
+                      {isEditingName ? (
+                        <div className="name-edit">
+                          <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') updateProjectName(); if (e.key === 'Escape') { setIsEditingName(false); setEditName(activeProjectData?.name || '') } }}
+                            onBlur={() => { if (editName.trim() !== activeProjectData?.name) updateProjectName(); else setIsEditingName(false) }}
+                            autoFocus className="name-input" />
+                          {isSaving && <span className="saving-indicator">Kaydediliyor...</span>}
+                        </div>
+                      ) : (
+                        <h1 className="project-title" onClick={() => { setEditName(activeProjectData?.name || ''); setIsEditingName(true) }} title="Düzenlemek için tıklayın">
+                          {activeProjectData?.name || 'Yükleniyor...'}
+                          <svg className="edit-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                          </svg>
+                        </h1>
+                      )}
+                      <div className="project-meta">
+                        <span className="meta-item">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                          {activeProjectData?.created_at ? new Date(activeProjectData.created_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' }) : '-'}
+                        </span>
+                        <span className="meta-item">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                          {activeProjectData?.messages?.[0]?.count || 0} mesaj
+                        </span>
+                      </div>
+                    </div>
+                    <div className="quick-actions">
+                      <button className="action-btn primary" onClick={() => setActiveView('dashboard')}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                        Chat'e Git
+                      </button>
+                      <button className="action-btn secondary" onClick={() => setActiveView('files')}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        Dosyalar
+                      </button>
+                      <button className="action-btn danger" onClick={() => setShowDeleteModal(true)}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        Projeyi Sil
+                      </button>
+                    </div>
+                    <div className="messages-section">
+                      <h3 className="section-heading">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                        Son Mesajlar
+                      </h3>
+                      {recentMessages.length === 0 ? (
+                        <div className="no-messages">Henüz mesaj yok</div>
+                      ) : (
+                        <div className="messages-list">
+                          {recentMessages.map((msg) => (
+                            <div key={msg.id} className={`message-item ${msg.role}`}>
+                              <div className="message-avatar">{msg.role === 'user' ? 'U' : 'AI'}</div>
+                              <div className="message-content">
+                                <div className="message-header">
+                                  <span className="message-role">{msg.role === 'user' ? 'Kullanıcı' : 'AI'}</span>
+                                  <span className="message-time">{timeAgo(msg.created_at)}</span>
+                                </div>
+                                <p className="message-text">{msg.content.length > 120 ? msg.content.slice(0, 120) + '...' : msg.content}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Delete Confirmation Modal */}
                 {showDeleteModal && (
@@ -643,24 +725,11 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                     <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                       <h3 className="modal-title">Projeyi Sil</h3>
                       <p className="modal-desc">
-                        <strong>"{activeProjectData?.name}"</strong> projesini silmek istediğinize emin misiniz?
-                        <br />Bu işlem geri alınamaz.
+                        <strong>"{activeProjectData?.name}"</strong> projesini silmek istediğinize emin misiniz?<br />Bu işlem geri alınamaz.
                       </p>
                       <div className="modal-actions">
-                        <button 
-                          className="modal-btn secondary"
-                          onClick={() => setShowDeleteModal(false)}
-                          disabled={isDeleting}
-                        >
-                          İptal
-                        </button>
-                        <button 
-                          className="modal-btn danger"
-                          onClick={deleteProject}
-                          disabled={isDeleting}
-                        >
-                          {isDeleting ? 'Siliniyor...' : 'Evet, Sil'}
-                        </button>
+                        <button className="modal-btn secondary" onClick={() => setShowDeleteModal(false)} disabled={isDeleting}>İptal</button>
+                        <button className="modal-btn danger" onClick={deleteProject} disabled={isDeleting}>{isDeleting ? 'Siliniyor...' : 'Evet, Sil'}</button>
                       </div>
                     </div>
                   </div>
@@ -1483,6 +1552,82 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
           .modal-actions {
             flex-direction: column-reverse;
           }
+        }
+        /* IDE View Styles */
+        .ide-container {
+          display: flex; flex-direction: column; height: 100%; overflow: hidden;
+        }
+        .ide-tabs {
+          display: flex; gap: 0; padding: 0 16px;
+          border-bottom: 1px solid var(--glass-border); background: rgba(0,0,0,0.2); flex-shrink: 0;
+        }
+        .ide-tab {
+          display: flex; align-items: center; gap: 8px;
+          padding: 12px 18px; font-size: 13px; font-weight: 500;
+          color: var(--text-secondary); background: transparent; border: none;
+          border-bottom: 2px solid transparent; cursor: pointer; transition: all 0.15s ease;
+        }
+        .ide-tab:hover { color: var(--text-primary); background: rgba(255,255,255,0.03); }
+        .ide-tab.active { color: var(--accent-cyan); border-bottom-color: var(--accent-cyan); }
+        .ide-badge {
+          font-size: 10px; padding: 2px 6px; background: var(--accent-cyan);
+          color: #000; border-radius: 10px; font-weight: 600;
+        }
+        .ide-code-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .code-selector {
+          display: flex; gap: 8px; padding: 10px 16px;
+          border-bottom: 1px solid var(--glass-border); overflow-x: auto; background: rgba(0,0,0,0.15); flex-shrink: 0;
+        }
+        .code-sel-btn {
+          display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+          background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
+          border-radius: 6px; cursor: pointer; transition: all 0.15s ease; white-space: nowrap; color: var(--text-primary);
+        }
+        .code-sel-btn:hover { background: rgba(255,255,255,0.06); border-color: var(--glass-border-hover); }
+        .code-sel-btn.active { background: rgba(0,212,255,0.1); border-color: var(--accent-cyan); }
+        .lang-tag {
+          font-size: 10px; padding: 2px 6px; background: var(--accent-purple);
+          color: white; border-radius: 4px; font-weight: 600; text-transform: uppercase;
+        }
+        .code-display { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .code-toolbar {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 10px 16px; background: rgba(0,0,0,0.3); border-bottom: 1px solid var(--glass-border); flex-shrink: 0;
+        }
+        .code-copy-btn {
+          padding: 5px 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border);
+          border-radius: 6px; color: var(--text-secondary); font-size: 12px; cursor: pointer; transition: all 0.15s ease;
+        }
+        .code-copy-btn:hover { background: rgba(255,255,255,0.1); color: var(--text-primary); }
+        .code-pre {
+          flex: 1; margin: 0; padding: 16px; background: rgba(0,0,0,0.4); overflow: auto;
+          font-family: 'SF Mono', Monaco, Inconsolata, 'Roboto Mono', monospace; font-size: 13px; line-height: 1.6;
+        }
+        .code-pre code { color: #e0e0e0; }
+        .ide-preview-panel { flex: 1; display: flex; flex-direction: column; padding: 12px; overflow: hidden; }
+        .preview-toolbar { display: flex; gap: 8px; margin-bottom: 10px; flex-shrink: 0; }
+        .preview-action-btn {
+          padding: 7px 14px; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border);
+          border-radius: 6px; color: var(--text-secondary); font-size: 12px; cursor: pointer; transition: all 0.15s ease;
+        }
+        .preview-action-btn:hover { background: rgba(255,255,255,0.1); color: var(--text-primary); }
+        .preview-frame-wrap {
+          flex: 1; background: white; border-radius: 8px; overflow: hidden; border: 1px solid var(--glass-border);
+        }
+        .preview-iframe { width: 100%; height: 100%; border: none; background: white; }
+        .fullscreen-overlay {
+          position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+          background: rgba(0,0,0,0.9); backdrop-filter: blur(8px);
+          display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px;
+        }
+        .fullscreen-box {
+          width: 100%; height: 100%; max-width: 1400px; background: #1a1a2e;
+          border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; border: 1px solid var(--glass-border);
+        }
+        .fullscreen-bar {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 14px 20px; background: rgba(0,0,0,0.3); border-bottom: 1px solid var(--glass-border);
+          font-size: 14px; font-weight: 600; color: var(--text-primary);
         }
       `}</style>
     </main>

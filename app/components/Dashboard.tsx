@@ -7,7 +7,7 @@ import Sidebar from './Sidebar'
 import MainWorkspace from './MainWorkspace'
 import ChatPanel from './ChatPanel'
 
-type ViewType = 'dashboard' | 'workspace' | 'files' | 'agents' | 'reviews'
+type ViewType = 'dashboard' | 'workspace' | 'files' | 'reviews'
 
 export default function Dashboard() {
   const { data: session, status } = useSession()

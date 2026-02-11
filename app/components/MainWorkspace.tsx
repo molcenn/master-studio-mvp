@@ -38,7 +38,7 @@ interface Review {
   diff: string | null
 }
 
-type ViewType = 'dashboard' | 'workspace' | 'files' | 'agents' | 'reviews'
+type ViewType = 'dashboard' | 'workspace' | 'files' | 'reviews'
 type ReviewFilter = 'all' | 'pending' | 'approved' | 'rejected'
 type IdeTabType = 'code' | 'preview' | 'details' | 'milestones'
 
@@ -51,22 +51,6 @@ interface Milestone {
   tasks: { id: string; text: string; done: boolean }[]
   projectId: string
   comments?: { text: string; author: string; timestamp: string }[]
-}
-
-interface Agent {
-  id: string
-  name: string
-  model: 'kimi' | 'sonnet' | 'opus' | 'gpt4o'
-  description: string
-  createdAt: string
-  isDefault?: boolean
-}
-
-const MODEL_LABELS: Record<Agent['model'], string> = {
-  kimi: 'Kimi K2.5',
-  sonnet: 'Sonnet 4.5',
-  opus: 'Opus 4.6',
-  gpt4o: 'GPT-4o'
 }
 
 interface MainWorkspaceProps {
@@ -193,77 +177,6 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
   const [newMilestone, setNewMilestone] = useState({ title: '', description: '', dueDate: '' })
   const [newTaskText, setNewTaskText] = useState<{[key: string]: string}>({})
   const [newCommentText, setNewCommentText] = useState<{[key: string]: string}>({})
-
-  // Agents state
-  const [agents, setAgents] = useState<Agent[]>([])
-  const [showAgentForm, setShowAgentForm] = useState(false)
-  const [newAgent, setNewAgent] = useState<{ name: string; model: Agent['model']; description: string }>({
-    name: '',
-    model: 'kimi',
-    description: ''
-  })
-  const [activeAgentId, setActiveAgentId] = useState<string | null>(null)
-
-  // Load agents from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem('master-studio-agents')
-    if (saved) {
-      try {
-        setAgents(JSON.parse(saved))
-      } catch (e) {
-        console.error('Error loading agents:', e)
-      }
-    }
-    const savedActive = localStorage.getItem('active-agent-id')
-    if (savedActive) {
-      setActiveAgentId(savedActive)
-    }
-  }, [])
-
-  // Save agents to localStorage
-  useEffect(() => {
-    localStorage.setItem('master-studio-agents', JSON.stringify(agents))
-  }, [agents])
-
-  // Save active agent ID to localStorage
-  useEffect(() => {
-    if (activeAgentId) {
-      localStorage.setItem('active-agent-id', activeAgentId)
-    }
-  }, [activeAgentId])
-
-  // Create new agent
-  const createAgent = () => {
-    if (!newAgent.name.trim()) return
-    
-    const agent: Agent = {
-      id: crypto.randomUUID(),
-      name: newAgent.name.trim(),
-      model: newAgent.model,
-      description: newAgent.description.trim(),
-      createdAt: new Date().toISOString(),
-      isDefault: false
-    }
-    
-    setAgents(prev => [...prev, agent])
-    setNewAgent({ name: '', model: 'kimi', description: '' })
-    setShowAgentForm(false)
-  }
-
-  // Delete agent
-  const deleteAgent = (id: string) => {
-    setAgents(prev => prev.filter(a => a.id !== id))
-    if (activeAgentId === id) {
-      setActiveAgentId(null)
-      localStorage.removeItem('active-agent-id')
-    }
-  }
-
-  // Open chat with agent
-  const openChat = (agentId: string) => {
-    setActiveAgentId(agentId)
-    localStorage.setItem('active-agent-id', agentId)
-  }
 
   // Fetch stats and projects
   useEffect(() => {
@@ -712,7 +625,6 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
     dashboard: displayProject ? displayProject.name : 'Dashboard',
     workspace: 'Workspace',
     files: displayProject ? `${displayProject.name} — Files` : 'Files',
-    agents: 'Agents',
     reviews: 'Reviews'
   }
 
@@ -1543,136 +1455,6 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                 </table>
               </div>
             )}
-          </div>
-        )}
-
-        {activeView === 'agents' && (
-          <div className="agents-view">
-            {/* Header */}
-            <div className="agents-header">
-              <h2 className="agents-title">Agents</h2>
-              <button className="new-agent-btn" onClick={() => setShowAgentForm(true)}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="12" y1="5" x2="12" y2="19"/>
-                  <line x1="5" y1="12" x2="19" y2="12"/>
-                </svg>
-                New Agent
-              </button>
-            </div>
-
-            {/* New Agent Form */}
-            {showAgentForm && (
-              <div className="agent-form">
-                <div className="agent-form-header">
-                  <h3>Create New Agent</h3>
-                </div>
-                <div className="agent-form-body">
-                  <div className="agent-form-field">
-                    <label className="agent-form-label">Agent Name *</label>
-                    <input
-                      type="text"
-                      className="agent-form-input"
-                      placeholder="e.g., Research Assistant"
-                      value={newAgent.name}
-                      onChange={(e) => setNewAgent({ ...newAgent, name: e.target.value })}
-                      autoFocus
-                    />
-                  </div>
-                  <div className="agent-form-field">
-                    <label className="agent-form-label">Model</label>
-                    <select
-                      className="agent-form-select"
-                      value={newAgent.model}
-                      onChange={(e) => setNewAgent({ ...newAgent, model: e.target.value as Agent['model'] })}
-                    >
-                      <option value="kimi">Kimi K2.5</option>
-                      <option value="sonnet">Sonnet 4.5</option>
-                      <option value="opus">Opus 4.6</option>
-                      <option value="gpt4o">GPT-4o</option>
-                    </select>
-                  </div>
-                  <div className="agent-form-field">
-                    <label className="agent-form-label">Description</label>
-                    <textarea
-                      className="agent-form-textarea"
-                      placeholder="Optional description..."
-                      value={newAgent.description}
-                      onChange={(e) => setNewAgent({ ...newAgent, description: e.target.value })}
-                      rows={2}
-                    />
-                  </div>
-                </div>
-                <div className="agent-form-actions">
-                  <button className="agent-form-btn secondary" onClick={() => setShowAgentForm(false)}>Cancel</button>
-                  <button
-                    className="agent-form-btn primary"
-                    onClick={createAgent}
-                    disabled={!newAgent.name.trim()}
-                  >
-                    Create
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Agent List */}
-            <div className="agent-list">
-              {/* Main Agent (Betsy) - Always first */}
-              <div className={`agent-card ${activeAgentId === 'main-agent' ? 'active' : ''}`}>
-                <div className="agent-card-header">
-                  <div className="agent-avatar-large cyan">B</div>
-                  <div className="agent-info">
-                    <div className="agent-name">Main Agent (Betsy)</div>
-                    <div className="agent-model">Model: Kimi K2.5</div>
-                  </div>
-                  <span className="agent-status-badge active">Active</span>
-                </div>
-                <div className="agent-description">Default main agent</div>
-                <div className="agent-card-actions">
-                  <button className="agent-action-btn primary" onClick={() => openChat('main-agent')}>
-                    Open Chat
-                  </button>
-                </div>
-              </div>
-
-              {/* User-created agents */}
-              {agents.map((agent) => (
-                <div key={agent.id} className={`agent-card ${activeAgentId === agent.id ? 'active' : ''}`}>
-                  <div className="agent-card-header">
-                    <div className="agent-avatar-large purple">{agent.name.charAt(0).toUpperCase()}</div>
-                    <div className="agent-info">
-                      <div className="agent-name">{agent.name}</div>
-                      <div className="agent-model">Model: {MODEL_LABELS[agent.model]}</div>
-                    </div>
-                    <span className="agent-status-badge active">Active</span>
-                  </div>
-                  {agent.description && <div className="agent-description">{agent.description}</div>}
-                  <div className="agent-card-actions">
-                    <button className="agent-action-btn primary" onClick={() => openChat(agent.id)}>
-                      Open Chat
-                    </button>
-                    <button className="agent-action-btn danger" onClick={() => deleteAgent(agent.id)}>
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              ))}
-
-              {agents.length === 0 && (
-                <div className="agents-empty">
-                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" strokeWidth="1.5">
-                    <path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"/>
-                    <path d="M8.5 8.5v.01"/>
-                    <path d="M16 15.5v.01"/>
-                    <path d="M12 12v.01"/>
-                    <path d="M11 17v.01"/>
-                    <path d="M7 14v.01"/>
-                  </svg>
-                  <p>No custom agents yet</p>
-                  <p className="agents-empty-hint">Click "New Agent" to create your first agent</p>
-                </div>
-              )}
-            </div>
           </div>
         )}
 

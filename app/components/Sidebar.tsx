@@ -8,7 +8,7 @@ interface Project {
   created_at: string
 }
 
-type ViewType = 'dashboard' | 'workspace' | 'files' | 'agents' | 'reviews'
+type ViewType = 'dashboard' | 'workspace' | 'files' | 'reviews'
 
 interface SidebarProps {
   activeProject: string
@@ -191,20 +191,6 @@ export default function Sidebar({ activeProject, setActiveProject, user, activeV
               <polyline points="14 2 14 8 20 8"/>
             </svg>
             Files
-          </div>
-          <div 
-            className={`nav-item ${activeView === 'agents' ? 'active' : ''}`}
-            onClick={() => setActiveView('agents')}
-          >
-            <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <circle cx="12" cy="12" r="3"/>
-              <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
-              <circle cx="4.93" cy="4.93" r="1.5"/>
-              <circle cx="19.07" cy="4.93" r="1.5"/>
-              <circle cx="19.07" cy="19.07" r="1.5"/>
-            </svg>
-            Agents
-            <span className="nav-badge purple">4</span>
           </div>
           <div 
             className={`nav-item ${activeView === 'reviews' ? 'active' : ''}`}

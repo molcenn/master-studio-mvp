@@ -14,7 +14,15 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
   }
 
-  const { projectId, message, context = [], stream = false } = await req.json()
+  const { projectId, message, context = [], stream = false, model: selectedModel = 'kimi' } = await req.json()
+  
+  // Model mapping for Gateway
+  const modelMapping: Record<string, string> = {
+    kimi: 'openclaw:main',
+    sonnet: 'anthropic/claude-sonnet-4-5-20250929',
+    opus: 'anthropic/claude-opus-4-6',
+  }
+  const gatewayModel = modelMapping[selectedModel] || 'openclaw:main'
   
   if (!projectId || !message) {
     return new Response(JSON.stringify({ error: 'Missing required fields' }), { status: 400 })
@@ -62,7 +70,7 @@ export async function POST(req: NextRequest) {
         'x-openclaw-agent-id': 'main',
       },
       body: JSON.stringify({
-        model: 'openclaw:main',
+        model: gatewayModel,
         messages: [
           ...contextMessages,
           { role: 'user', content: message },

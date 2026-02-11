@@ -129,7 +129,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
               <div className="message agent">
                 <div className="message-header">
                   <span className="message-agent-name">Betsy</span>
-                  <span className="message-model">Kimi K2.5</span>
+                  <span className="message-model">{MODEL_DISPLAY_NAMES[selectedModel]}</span>
                   <span className="message-time">şimdi</span>
                 </div>
                 <div>{streamingContent}</div>
@@ -149,6 +149,17 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
           </div>
 
           {/* Chat Input */}
+          <div className="chat-input-header">
+            <span 
+              className="model-badge"
+              style={{ 
+                backgroundColor: MODEL_BADGE_COLORS[selectedModel].bg,
+                color: MODEL_BADGE_COLORS[selectedModel].text 
+              }}
+            >
+              {MODEL_DISPLAY_NAMES[selectedModel]}
+            </span>
+          </div>
           <div className="chat-input-area">
             <div className="chat-input-wrapper">
               <div className="chat-input-actions">
@@ -364,8 +375,21 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
           50% { opacity: 1; transform: scale(1.2); }
         }
         .thinking-text { font-size: 11px; color: var(--text-tertiary); }
+        .chat-input-header {
+          padding: 8px 14px 0;
+          display: flex;
+          justify-content: flex-end;
+        }
+        .model-badge {
+          font-size: 10px;
+          font-weight: 500;
+          padding: 3px 8px;
+          border-radius: 10px;
+          border: 1px solid currentColor;
+          opacity: 0.8;
+        }
         .chat-input-area {
-          padding: 12px 14px; border-top: 1px solid var(--glass-border);
+          padding: 8px 14px 12px; border-top: none;
           flex-shrink: 0;
         }
         .chat-input-wrapper {

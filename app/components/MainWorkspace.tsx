@@ -479,14 +479,192 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
         )}
 
         {activeView === 'workspace' && (
-          <EmptyState 
-            icon={<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" strokeWidth="1.5">
-              <rect x="3" y="3" width="18" height="18" rx="2"/>
-              <line x1="12" y1="3" x2="12" y2="21"/>
-            </svg>}
-            title="Proje çalışma alanı"
-            description="Bir proje seçin"
-          />
+          <>
+            {!activeProject || activeProject === DEFAULT_PROJECT_ID ? (
+              <EmptyState 
+                icon={<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" strokeWidth="1.5">
+                  <rect x="3" y="3" width="18" height="18" rx="2"/>
+                  <line x1="12" y1="3" x2="12" y2="21"/>
+                </svg>}
+                title="Proje çalışma alanı"
+                description="Bir proje seçin"
+              />
+            ) : (
+              <div className="workspace-detail">
+                {/* Project Header */}
+                <div className="workspace-header">
+                  {isEditingName ? (
+                    <div className="name-edit">
+                      <input
+                        type="text"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') updateProjectName()
+                          if (e.key === 'Escape') {
+                            setIsEditingName(false)
+                            setEditName(activeProjectData?.name || '')
+                          }
+                        }}
+                        onBlur={() => {
+                          if (editName.trim() !== activeProjectData?.name) {
+                            updateProjectName()
+                          } else {
+                            setIsEditingName(false)
+                          }
+                        }}
+                        autoFocus
+                        className="name-input"
+                      />
+                      {isSaving && <span className="saving-indicator">Kaydediliyor...</span>}
+                    </div>
+                  ) : (
+                    <h1 
+                      className="project-title"
+                      onClick={() => {
+                        setEditName(activeProjectData?.name || '')
+                        setIsEditingName(true)
+                      }}
+                      title="Düzenlemek için tıklayın"
+                    >
+                      {activeProjectData?.name || 'Yükleniyor...'}
+                      <svg className="edit-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                      </svg>
+                    </h1>
+                  )}
+                  
+                  {/* Project Meta */}
+                  <div className="project-meta">
+                    <span className="meta-item">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                        <line x1="16" y1="2" x2="16" y2="6"/>
+                        <line x1="8" y1="2" x2="8" y2="6"/>
+                        <line x1="3" y1="10" x2="21" y2="10"/>
+                      </svg>
+                      {activeProjectData?.created_at 
+                        ? new Date(activeProjectData.created_at).toLocaleDateString('tr-TR', { 
+                            day: 'numeric', 
+                            month: 'long', 
+                            year: 'numeric' 
+                          })
+                        : '-'
+                      }
+                    </span>
+                    <span className="meta-item">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                      </svg>
+                      {activeProjectData?.messages?.[0]?.count || 0} mesaj
+                    </span>
+                  </div>
+                </div>
+
+                {/* Quick Actions */}
+                <div className="quick-actions">
+                  <button 
+                    className="action-btn primary"
+                    onClick={() => setActiveView('dashboard')}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    Chat'e Git
+                  </button>
+                  <button 
+                    className="action-btn secondary"
+                    onClick={() => setActiveView('files')}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                      <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                    Dosyalar
+                  </button>
+                  <button 
+                    className="action-btn danger"
+                    onClick={() => setShowDeleteModal(true)}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="3 6 5 6 21 6"/>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                    Projeyi Sil
+                  </button>
+                </div>
+
+                {/* Recent Messages */}
+                <div className="messages-section">
+                  <h3 className="section-heading">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    Son Mesajlar
+                  </h3>
+                  {recentMessages.length === 0 ? (
+                    <div className="no-messages">Henüz mesaj yok</div>
+                  ) : (
+                    <div className="messages-list">
+                      {recentMessages.map((msg) => (
+                        <div key={msg.id} className={`message-item ${msg.role}`}>
+                          <div className="message-avatar">
+                            {msg.role === 'user' ? 'U' : 'AI'}
+                          </div>
+                          <div className="message-content">
+                            <div className="message-header">
+                              <span className="message-role">
+                                {msg.role === 'user' ? 'Kullanıcı' : 'AI'}
+                              </span>
+                              <span className="message-time">
+                                {timeAgo(msg.created_at)}
+                              </span>
+                            </div>
+                            <p className="message-text">
+                              {msg.content.length > 120 
+                                ? msg.content.slice(0, 120) + '...' 
+                                : msg.content
+                              }
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Delete Confirmation Modal */}
+                {showDeleteModal && (
+                  <div className="modal-overlay" onClick={() => setShowDeleteModal(false)}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                      <h3 className="modal-title">Projeyi Sil</h3>
+                      <p className="modal-desc">
+                        <strong>"{activeProjectData?.name}"</strong> projesini silmek istediğinize emin misiniz?
+                        <br />Bu işlem geri alınamaz.
+                      </p>
+                      <div className="modal-actions">
+                        <button 
+                          className="modal-btn secondary"
+                          onClick={() => setShowDeleteModal(false)}
+                          disabled={isDeleting}
+                        >
+                          İptal
+                        </button>
+                        <button 
+                          className="modal-btn danger"
+                          onClick={deleteProject}
+                          disabled={isDeleting}
+                        >
+                          {isDeleting ? 'Siliniyor...' : 'Evet, Sil'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
 
         {activeView === 'files' && (
@@ -857,6 +1035,139 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
         .agent-description { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
         @media (max-width: 768px) {
           .agents-grid { grid-template-columns: 1fr; }
+        }
+
+        /* Files View Styles */
+        .files-container {
+          display: flex;
+          flex-direction: column;
+          height: 100%;
+        }
+        .files-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 20px;
+          padding: 0 4px;
+        }
+        .files-count {
+          font-size: 13px;
+          color: var(--text-secondary);
+        }
+        .upload-btn {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 16px;
+          background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+          border: none;
+          border-radius: 8px;
+          color: white;
+          font-size: 13px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+        .upload-btn:hover:not(:disabled) {
+          opacity: 0.9;
+          transform: translateY(-1px);
+        }
+        .upload-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+        .files-loading {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 12px;
+          height: 200px;
+          color: var(--text-secondary);
+          font-size: 14px;
+        }
+        .files-table-container {
+          background: rgba(0,0,0,0.2);
+          border: 1px solid var(--glass-border);
+          border-radius: 12px;
+          overflow: hidden;
+        }
+        .files-table {
+          width: 100%;
+          border-collapse: collapse;
+        }
+        .files-table th {
+          text-align: left;
+          padding: 12px 16px;
+          font-size: 11px;
+          font-weight: 600;
+          color: var(--text-tertiary);
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          border-bottom: 1px solid var(--glass-border);
+          background: rgba(0,0,0,0.15);
+        }
+        .files-table td {
+          padding: 14px 16px;
+          font-size: 13px;
+          color: var(--text-secondary);
+          border-bottom: 1px solid var(--glass-border);
+        }
+        .file-row {
+          cursor: pointer;
+          transition: all 0.15s ease;
+          animation: fadeInUp 0.3s ease forwards;
+          opacity: 0;
+        }
+        .file-row:hover {
+          background: rgba(255,255,255,0.03);
+        }
+        .file-row:last-child td {
+          border-bottom: none;
+        }
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(8px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .file-name-cell {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+        .file-icon {
+          width: 32px;
+          height: 32px;
+          border-radius: 8px;
+          background: rgba(0,0,0,0.3);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+        .file-name {
+          font-weight: 500;
+          color: var(--text-primary);
+        }
+        .file-size {
+          white-space: nowrap;
+        }
+        .file-type {
+          white-space: nowrap;
+        }
+        .file-date {
+          white-space: nowrap;
+        }
+        .spin {
+          animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
         }
       `}</style>
     </main>

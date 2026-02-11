@@ -100,73 +100,120 @@ export async function POST(req: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         // Send user message first
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'user_message', message: userMessage })}
-
-`))
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'user_message', message: userMessage })}\n\n`))
         
         // Send AI message ID
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'ai_id', messageId })}
-
-`))
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'ai_id', messageId })}\n\n`))
 
         if (!aiResponse.body) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', error: 'No response body' })}
-
-`))
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', error: 'No response body' })}\n\n`))
           controller.close()
           return
         }
 
         const reader = aiResponse.body.getReader()
         let fullContent = ''
+        let buffer = '' // Buffer for incomplete SSE events
 
         try {
           while (true) {
             const { done, value } = await reader.read()
             if (done) break
 
-            const chunk = new TextDecoder().decode(value)
-            const lines = chunk.split('\n')
-
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                const data = line.slice(6)
-                
-                if (data === '[DONE]') {
-                  // Stream complete, update database with full content
-                  await supabase
-                    .from('messages')
-                    .update({ content: fullContent })
-                    .eq('id', messageId)
+            // Append new chunk to buffer
+            buffer += new TextDecoder().decode(value)
+            
+            // Split on double newlines (SSE event delimiter)
+            const events = buffer.split('\n\n')
+            
+            // Keep the last item in buffer (could be incomplete)
+            buffer = events.pop() || ''
+            
+            // Process complete events
+            for (const event of events) {
+              const lines = event.split('\n')
+              
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  const data = line.slice(6)
                   
-                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done' })}
-
-`))
-                  controller.close()
-                  return
-                }
-
-                try {
-                  const parsed = JSON.parse(data)
-                  const delta = parsed.choices?.[0]?.delta?.content
-                  
-                  if (delta) {
-                    fullContent += delta
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'chunk', content: delta })}
-
-`))
+                  if (data === '[DONE]') {
+                    // Stream complete, update database with full content
+                    await supabase
+                      .from('messages')
+                      .update({ content: fullContent })
+                      .eq('id', messageId)
+                    
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`))
+                    controller.close()
+                    return
                   }
-                } catch (e) {
-                  // Ignore parse errors for incomplete chunks
+
+                  try {
+                    const parsed = JSON.parse(data)
+                    const delta = parsed.choices?.[0]?.delta?.content
+                    
+                    if (delta) {
+                      fullContent += delta
+                      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'chunk', content: delta })}\n\n`))
+                    }
+                  } catch (e) {
+                    // Ignore parse errors for incomplete chunks
+                  }
                 }
               }
             }
           }
+          
+          // Process any remaining data in buffer when stream ends
+          if (buffer.trim()) {
+            const lines = buffer.split('\n')
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const data = line.slice(6)
+                if (data === '[DONE]') {
+                  await supabase
+                    .from('messages')
+                    .update({ content: fullContent })
+                    .eq('id', messageId)
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`))
+                  controller.close()
+                  return
+                }
+                try {
+                  const parsed = JSON.parse(data)
+                  const delta = parsed.choices?.[0]?.delta?.content
+                  if (delta) {
+                    fullContent += delta
+                  }
+                } catch (e) {
+                  // Ignore parse errors
+                }
+              }
+            }
+          }
+          
+          // Stream ended normally - save final content
+          await supabase
+            .from('messages')
+            .update({ content: fullContent })
+            .eq('id', messageId)
+          
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`))
+          controller.close()
+          
         } catch (err) {
           console.error('Stream error:', err)
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', error: 'Stream interrupted' })}
-
-`))
+          
+          // Save partial content on error/abort
+          if (fullContent) {
+            await supabase
+              .from('messages')
+              .update({ content: fullContent })
+              .eq('id', messageId)
+          }
+          
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', error: 'Stream interrupted' })}\n\n`))
           controller.close()
         }
       },

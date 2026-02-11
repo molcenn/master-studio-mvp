@@ -60,7 +60,7 @@ const skills = [
 ]
 
 export default function Sidebar({ activeProject, setActiveProject, user, activeView, setActiveView }: SidebarProps) {
-  const [skillsOpen, setSkillsOpen] = useState(true)
+  const [skillsOpen, setSkillsOpen] = useState(false)
   const [activeSkill, setActiveSkill] = useState<string | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
   const [isLoading, setIsLoading] = useState(true)

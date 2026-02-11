@@ -55,6 +55,12 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
   const { messages, streamingContent, sendMessage, uploadFile, stopGeneration, isLoading } = useChat({ projectId, model: selectedModel })
   const [input, setInput] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Auto-scroll to bottom when messages or streaming content changes
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, streamingContent])
 
   // Auto-detect HTML in agent messages and notify parent
   useEffect(() => {
@@ -192,6 +198,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
                 <span className="thinking-text">Düşünüyor...</span>
               </div>
             )}
+            <div ref={messagesEndRef} />
           </div>
 
           {/* Chat Input */}
@@ -228,7 +235,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
                 onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
                 placeholder="Mesaj yaz..."
                 className="chat-input"
-                rows={1}
+                rows={2}
                 disabled={isLoading}
               />
               {isLoading ? (
@@ -367,7 +374,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
         .chat-tab.active { color: var(--text-primary); border-bottom-color: var(--accent-cyan); }
         .chat-tab:hover:not(.active) { color: var(--text-secondary); }
         .chat-messages {
-          flex: 1; overflow-y: auto; padding: 16px;
+          flex: 1; overflow-y: auto; overflow-x: hidden; padding: 16px;
           display: flex; flex-direction: column; gap: 12px;
         }
         .message {
@@ -454,7 +461,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
         .chat-input {
           flex: 1; background: transparent; border: none;
           color: var(--text-primary); font-size: 13px; resize: none;
-          outline: none; min-height: 20px; max-height: 100px;
+          outline: none; min-height: 40px; max-height: 100px;
           font-family: inherit; line-height: 1.4;
         }
         .chat-input::placeholder { color: var(--text-tertiary); }

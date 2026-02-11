@@ -592,7 +592,16 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
   }
 
   const updateMilestone = (id: string, updates: Partial<Milestone>) => {
-    setMilestones(milestones.map(m => m.id === id ? { ...m, ...updates } : m))
+    setMilestones(milestones.map(m => {
+      if (m.id === id) {
+        const updated = { ...m, ...updates }
+        if (updates.status && updates.status !== m.status) {
+          notifyMilestoneUpdate(id, 'status', `Status changed to ${updates.status}`)
+        }
+        return updated
+      }
+      return m
+    }))
   }
 
   const deleteMilestone = (id: string) => {
@@ -608,10 +617,19 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
   }
 
   const toggleTask = (milestoneId: string, taskId: string) => {
-    setMilestones(milestones.map(m => m.id === milestoneId ? {
-      ...m,
-      tasks: m.tasks.map(t => t.id === taskId ? { ...t, done: !t.done } : t)
-    } : m))
+    setMilestones(milestones.map(m => {
+      if (m.id === milestoneId) {
+        const task = m.tasks.find(t => t.id === taskId)
+        if (task) {
+          notifyMilestoneUpdate(milestoneId, 'task', `Task "${task.text}" ${!task.done ? 'completed' : 'reopened'}`)
+        }
+        return {
+          ...m,
+          tasks: m.tasks.map(t => t.id === taskId ? { ...t, done: !t.done } : t)
+        }
+      }
+      return m
+    }))
   }
 
   const updateTaskText = (milestoneId: string, taskId: string, text: string) => {
@@ -1274,7 +1292,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                                 )}
 
                                 {/* Tasks */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
                                   {milestone.tasks.map((task) => (
                                     <div key={task.id} style={{
                                       display: 'flex', alignItems: 'center', gap: '8px',
@@ -1340,6 +1358,72 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                                         <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
                                       </svg>
                                       Add
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Comments Section */}
+                                <div style={{ borderTop: '1px solid var(--glass-border)', paddingTop: '12px' }}>
+                                  <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                                    </svg>
+                                    Comments {milestone.comments && milestone.comments.length > 0 && `(${milestone.comments.length})`}
+                                  </div>
+                                  
+                                  {/* Comments List */}
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+                                    {milestone.comments?.map((comment, index) => (
+                                      <div key={index} style={{
+                                        background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)',
+                                        borderRadius: '8px', padding: '10px 12px'
+                                      }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                          <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent-cyan)' }}>by {comment.author}</span>
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <span style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>{timeAgo(comment.timestamp)}</span>
+                                            <button
+                                              onClick={() => deleteComment(milestone.id, index)}
+                                              style={{
+                                                background: 'none', border: 'none', color: 'var(--text-tertiary)',
+                                                cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                              }}
+                                            >
+                                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                                              </svg>
+                                            </button>
+                                          </div>
+                                        </div>
+                                        <p style={{ fontSize: '12px', color: 'var(--text-primary)', margin: 0, lineHeight: 1.5 }}>{comment.text}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  
+                                  {/* Add Comment */}
+                                  <div style={{ display: 'flex', gap: '8px' }}>
+                                    <input
+                                      type="text"
+                                      placeholder="Comment"
+                                      value={newCommentText[milestone.id] || ''}
+                                      onChange={(e) => setNewCommentText({ ...newCommentText, [milestone.id]: e.target.value })}
+                                      onKeyDown={(e) => e.key === 'Enter' && addComment(milestone.id)}
+                                      style={{
+                                        flex: 1, background: 'rgba(0,0,0,0.3)', border: '1px solid var(--glass-border)',
+                                        borderRadius: '8px', padding: '8px 12px', color: 'var(--text-primary)',
+                                        fontSize: '13px', outline: 'none'
+                                      }}
+                                    />
+                                    <button
+                                      onClick={() => addComment(milestone.id)}
+                                      style={{
+                                        padding: '8px 16px', borderRadius: '8px', fontSize: '12px',
+                                        fontWeight: 500, cursor: 'pointer', border: 'none',
+                                        background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-purple))',
+                                        color: 'white'
+                                      }}
+                                    >
+                                      Add Comment
                                     </button>
                                   </div>
                                 </div>

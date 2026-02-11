@@ -447,90 +447,109 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
           </div>
         </>
       ) : (
-        /* Swarm Tab Content */
-        <div className="swarm-content">
-          <select value={selectedModel} onChange={(e) => {
-              const newModel = e.target.value
-              setSelectedModel(newModel)
-              // Otomatik model değiştirme komutu gönder
-              sendMessage('/model ' + newModel)
-            }}
-            style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.25)', color: 'var(--text-primary)', fontSize: '13px', marginBottom: '12px' }}>
-            <option value="kimi">Kimi K2.5 — Fast, daily tasks</option>
-            <option value="sonnet">Claude Sonnet — UI/UX, coding</option>
-            <option value="opus">Claude Opus — Deep analysis, review</option>
-            <option value="gpt-4o">GPT-4o — General purpose</option>
-          </select>
-          <div className="swarm-section-title">Active Agents</div>
-          <div className="swarm-agent-card">
-            <div className="swarm-agent-header">
-              <div className="swarm-avatar cyan">K</div>
-              <div>
-                <div className="swarm-agent-name">Kimi</div>
-                <div className="swarm-agent-model">Kimi K2.5</div>
-              </div>
-              <div className="swarm-status">
-                <div className="swarm-status-dot working"></div>
-                <span>Working</span>
-              </div>
+        /* Agents Tab Content */
+        <div className="agents-content">
+          <div className="agents-section-title">Agents</div>
+          
+          {/* Main Agent (Betsy) - Always first, cannot be deleted */}
+          <div 
+            className={`agent-item ${activeAgentId === 'main' ? 'active' : ''}`}
+            onClick={() => setActiveAgentId('main')}
+          >
+            <div className="agent-avatar">B</div>
+            <div className="agent-info">
+              <div className="agent-name">Betsy</div>
+              <div className="agent-model">{getModelDisplayName(selectedModel)}</div>
             </div>
-            <div className="swarm-task">Dashboard layout refactoring</div>
-            <div className="swarm-progress">
-              <div className="swarm-progress-bar">
-                <div className="swarm-progress-fill cyan" style={{ width: '75%' }}></div>
-              </div>
-            </div>
+            <div className="agent-status-dot active"></div>
           </div>
 
-          <div className="swarm-agent-card">
-            <div className="swarm-agent-header">
-              <div className="swarm-avatar purple">O</div>
-              <div>
-                <div className="swarm-agent-name">Opus</div>
-                <div className="swarm-agent-model">Claude Opus</div>
+          {/* User-created agents */}
+          {agents.map((agent) => (
+            <div 
+              key={agent.id}
+              className={`agent-item ${activeAgentId === agent.id ? 'active' : ''}`}
+              onClick={() => setActiveAgentId(agent.id)}
+            >
+              <div className="agent-avatar">{getAgentInitials(agent.name)}</div>
+              <div className="agent-info">
+                <div className="agent-name">{agent.name}</div>
+                <div className="agent-model">{getModelDisplayName(agent.model)}</div>
               </div>
-              <div className="swarm-status">
-                <div className="swarm-status-dot idle"></div>
-                <span>Idle</span>
-              </div>
+              <div className="agent-status-dot idle"></div>
+              <button 
+                className="agent-delete-btn"
+                onClick={(e) => { e.stopPropagation(); handleDeleteAgent(agent.id); }}
+                title="Delete agent"
+              >
+                ×
+              </button>
             </div>
-            <div className="swarm-task">Waiting for task in review queue</div>
-          </div>
+          ))}
 
-          <div className="swarm-agent-card">
-            <div className="swarm-agent-header">
-              <div className="swarm-avatar pink">C</div>
-              <div>
-                <div className="swarm-agent-name">Claude</div>
-                <div className="swarm-agent-model">Claude Sonnet</div>
+          {/* New Agent Button / Form */}
+          {!showAgentForm ? (
+            <button 
+              className="new-agent-btn"
+              onClick={() => setShowAgentForm(true)}
+            >
+              <span>+</span> New Agent
+            </button>
+          ) : (
+            <div className="agent-form">
+              <div className="agent-form-field">
+                <label>Name</label>
+                <input
+                  type="text"
+                  value={newAgentName}
+                  onChange={(e) => setNewAgentName(e.target.value)}
+                  placeholder="Agent name"
+                  autoFocus
+                />
               </div>
-              <div className="swarm-status">
-                <div className="swarm-status-dot working"></div>
-                <span>Working</span>
+              <div className="agent-form-field">
+                <label>Model</label>
+                <select 
+                  value={newAgentModel} 
+                  onChange={(e) => setNewAgentModel(e.target.value)}
+                >
+                  <option value="kimi">Kimi K2.5</option>
+                  <option value="sonnet">Sonnet 4.5</option>
+                  <option value="opus">Opus 4.6</option>
+                  <option value="gpt-4o">GPT-4o</option>
+                </select>
+              </div>
+              <div className="agent-form-field">
+                <label>Description</label>
+                <textarea
+                  value={newAgentDesc}
+                  onChange={(e) => setNewAgentDesc(e.target.value)}
+                  placeholder="What does this agent do?"
+                  rows={2}
+                />
+              </div>
+              <div className="agent-form-actions">
+                <button 
+                  className="agent-form-cancel"
+                  onClick={() => {
+                    setShowAgentForm(false)
+                    setNewAgentName('')
+                    setNewAgentModel('kimi')
+                    setNewAgentDesc('')
+                  }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  className="agent-form-create"
+                  onClick={handleCreateAgent}
+                  disabled={!newAgentName.trim()}
+                >
+                  Create
+                </button>
               </div>
             </div>
-            <div className="swarm-task">Preparing wireframe alternatives</div>
-            <div className="swarm-progress">
-              <div className="swarm-progress-bar">
-                <div className="swarm-progress-fill pink" style={{ width: '45%' }}></div>
-              </div>
-            </div>
-          </div>
-
-          <div className="swarm-agent-card">
-            <div className="swarm-agent-header">
-              <div className="swarm-avatar green">S</div>
-              <div>
-                <div className="swarm-agent-name">Sonnet</div>
-                <div className="swarm-agent-model">Claude Sonnet 3.5</div>
-              </div>
-              <div className="swarm-status">
-                <div className="swarm-status-dot waiting"></div>
-                <span>Awaiting Review</span>
-              </div>
-            </div>
-            <div className="swarm-task">API endpoint tests completed</div>
-          </div>
+          )}
         </div>
       )}
 
@@ -687,55 +706,120 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
           0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
           50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
         }
-        .swarm-content { padding: 14px; display: flex; flex-direction: column; gap: 10px; flex: 1; overflow-y: auto; }
-        .swarm-section-title { font-size: 11px; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
-        .swarm-agent-card {
-          background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border);
-          border-radius: 12px; padding: 12px; transition: all 0.15s ease;
+        .agents-content { padding: 14px; display: flex; flex-direction: column; gap: 6px; flex: 1; overflow-y: auto; }
+        .agents-section-title { font-size: 11px; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+        .agent-item {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 10px 12px;
+          border-radius: 8px;
+          cursor: pointer;
+          transition: background 0.15s;
+          position: relative;
         }
-        .swarm-agent-card:hover { border-color: var(--glass-border-hover); }
-        .swarm-agent-header {
-          display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
-        }
-        .swarm-avatar {
-          width: 28px; height: 28px; border-radius: 8px;
+        .agent-item:hover { background: rgba(255,255,255,0.05); }
+        .agent-item.active { background: rgba(0,212,255,0.1); border: 1px solid rgba(0,212,255,0.2); }
+        .agent-avatar {
+          width: 32px; height: 32px; border-radius: 50%;
           display: flex; align-items: center; justify-content: center;
-          font-size: 12px; font-weight: 700; flex-shrink: 0;
+          font-size: 14px; font-weight: 600;
+          background: rgba(0,212,255,0.15); color: var(--accent-cyan);
+          flex-shrink: 0;
         }
-        .swarm-avatar.cyan { background: linear-gradient(135deg, var(--accent-cyan), #0ea5e9); }
-        .swarm-avatar.purple { background: linear-gradient(135deg, var(--accent-purple), #7c3aed); }
-        .swarm-avatar.pink { background: linear-gradient(135deg, var(--accent-pink), #f43f5e); }
-        .swarm-avatar.green { background: linear-gradient(135deg, var(--accent-green), #16a34a); }
-        .swarm-agent-name { font-size: 12px; font-weight: 600; }
-        .swarm-agent-model { font-size: 9px; color: var(--text-tertiary); margin-top: 1px; }
-        .swarm-status {
-          margin-left: auto; display: flex; align-items: center; gap: 5px;
-          font-size: 10px; font-weight: 500;
+        .agent-info { flex: 1; min-width: 0; }
+        .agent-name { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+        .agent-model { font-size: 10px; color: var(--text-tertiary); margin-top: 2px; }
+        .agent-status-dot { width: 8px; height: 8px; border-radius: 50%; margin-left: auto; flex-shrink: 0; }
+        .agent-status-dot.active { background: #22c55e; }
+        .agent-status-dot.idle { background: rgba(255,255,255,0.2); }
+        .agent-delete-btn {
+          width: 18px; height: 18px; border-radius: 50%;
+          border: none; background: rgba(239,68,68,0.2);
+          color: #ef4444; font-size: 14px; line-height: 1;
+          cursor: pointer; display: flex; align-items: center; justify-content: center;
+          opacity: 0; transition: opacity 0.15s; margin-left: 6px; flex-shrink: 0;
         }
-        .swarm-status-dot { width: 6px; height: 6px; border-radius: 50%; }
-        .swarm-status-dot.working { background: var(--accent-green); }
-        .swarm-status-dot.idle { background: var(--text-tertiary); }
-        .swarm-status-dot.waiting { background: var(--accent-amber); }
-        .swarm-status-dot.error { background: var(--accent-red); }
-        .swarm-task {
-          font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;
-          padding-left: 38px;
+        .agent-item:hover .agent-delete-btn { opacity: 1; }
+        .agent-delete-btn:hover { background: rgba(239,68,68,0.4); }
+        .new-agent-btn {
+          display: flex; align-items: center; justify-content: center; gap: 6px;
+          padding: 10px 12px; margin-top: 8px;
+          border: 1px dashed var(--glass-border);
+          border-radius: 8px; background: transparent;
+          color: var(--text-secondary); font-size: 12px;
+          cursor: pointer; transition: all 0.15s;
         }
-        .swarm-progress {
-          padding-left: 38px;
+        .new-agent-btn:hover {
+          border-color: var(--accent-cyan);
+          color: var(--accent-cyan);
+          background: rgba(0,212,255,0.05);
         }
-        .swarm-progress-bar {
-          width: 100%; height: 3px; border-radius: 2px;
-          background: rgba(255,255,255,0.06);
+        .agent-form {
+          padding: 12px;
+          border: 1px solid var(--glass-border);
+          border-radius: 8px;
+          background: rgba(0,0,0,0.2);
+          margin-top: 8px;
         }
-        .swarm-progress-fill {
-          height: 100%; border-radius: 2px;
-          transition: width 0.6s ease;
+        .agent-form-field { margin-bottom: 10px; }
+        .agent-form-field label {
+          display: block;
+          font-size: 10px;
+          color: var(--text-tertiary);
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          margin-bottom: 4px;
         }
-        .swarm-progress-fill.cyan { background: var(--accent-cyan); }
-        .swarm-progress-fill.purple { background: var(--accent-purple); }
-        .swarm-progress-fill.pink { background: var(--accent-pink); }
-        .swarm-progress-fill.green { background: var(--accent-green); }
+        .agent-form-field input,
+        .agent-form-field select,
+        .agent-form-field textarea {
+          width: 100%;
+          padding: 8px 10px;
+          border: 1px solid var(--glass-border);
+          border-radius: 6px;
+          background: rgba(0,0,0,0.25);
+          color: var(--text-primary);
+          font-size: 12px;
+          font-family: inherit;
+          outline: none;
+        }
+        .agent-form-field input:focus,
+        .agent-form-field select:focus,
+        .agent-form-field textarea:focus {
+          border-color: rgba(0,212,255,0.3);
+        }
+        .agent-form-field textarea { resize: none; }
+        .agent-form-actions {
+          display: flex; gap: 8px; justify-content: flex-end;
+        }
+        .agent-form-cancel {
+          padding: 6px 12px;
+          border: 1px solid var(--glass-border);
+          border-radius: 6px;
+          background: transparent;
+          color: var(--text-secondary);
+          font-size: 11px;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+        .agent-form-cancel:hover {
+          background: rgba(255,255,255,0.05);
+          color: var(--text-primary);
+        }
+        .agent-form-create {
+          padding: 6px 14px;
+          border: none;
+          border-radius: 6px;
+          background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+          color: white;
+          font-size: 11px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: opacity 0.15s;
+        }
+        .agent-form-create:hover:not(:disabled) { opacity: 0.9; }
+        .agent-form-create:disabled { opacity: 0.4; cursor: not-allowed; }
         .file-preview-card {
           background: rgba(0,0,0,0.25); border: 1px solid var(--glass-border);
           border-radius: 12px; padding: 10px 12px;

@@ -26,7 +26,30 @@ interface FileItem {
   key: string
 }
 
+interface Review {
+  id: string
+  title: string
+  description: string
+  agent: string
+  project: string
+  status: 'pending' | 'approved' | 'rejected'
+  type: 'code' | 'feature' | 'design' | 'decision'
+  created_at: string
+  diff: string | null
+}
+
 type ViewType = 'dashboard' | 'workspace' | 'files' | 'milestones' | 'agents' | 'reviews'
+type ReviewFilter = 'all' | 'pending' | 'approved' | 'rejected'
+
+interface Milestone {
+  id: string
+  title: string
+  description: string
+  status: 'planned' | 'in-progress' | 'completed'
+  dueDate: string
+  tasks: { id: string; text: string; done: boolean }[]
+  projectId: string
+}
 
 interface MainWorkspaceProps {
   activeProject: string
@@ -140,6 +163,18 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
   const [previewKey, setPreviewKey] = useState(0)
   const [isFullscreen, setIsFullscreen] = useState(false)
 
+  // Reviews view state
+  const [reviews, setReviews] = useState<Review[]>([])
+  const [reviewsLoading, setReviewsLoading] = useState(false)
+  const [reviewFilter, setReviewFilter] = useState<ReviewFilter>('all')
+
+  // Milestones state
+  const [milestones, setMilestones] = useState<Milestone[]>([])
+  const [showMilestoneForm, setShowMilestoneForm] = useState(false)
+  const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null)
+  const [newMilestone, setNewMilestone] = useState({ title: '', description: '', dueDate: '' })
+  const [newTaskText, setNewTaskText] = useState<{[key: string]: string}>({})
+
   // Fetch stats and projects
   useEffect(() => {
     fetchData()
@@ -167,12 +202,36 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
     return () => clearInterval(iv)
   }, [activeView, ideTab, activeProject])
 
+  // Load milestones from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('master-studio-milestones')
+    if (saved) {
+      try {
+        setMilestones(JSON.parse(saved))
+      } catch (e) {
+        console.error('Error loading milestones:', e)
+      }
+    }
+  }, [])
+
+  // Save milestones to localStorage
+  useEffect(() => {
+    localStorage.setItem('master-studio-milestones', JSON.stringify(milestones))
+  }, [milestones])
+
   // Fetch files when viewing files tab
   useEffect(() => {
     if (activeView === 'files' && activeProject) {
       fetchFiles()
     }
   }, [activeView, activeProject])
+
+  // Fetch reviews when viewing reviews tab
+  useEffect(() => {
+    if (activeView === 'reviews') {
+      fetchReviews()
+    }
+  }, [activeView, reviewFilter])
 
   const fetchData = async () => {
     try {
@@ -346,6 +405,148 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
       }
+    }
+  }
+
+  // Fetch reviews
+  const fetchReviews = async () => {
+    setReviewsLoading(true)
+    try {
+      const res = await fetch(`/api/reviews?status=${reviewFilter}`)
+      if (res.ok) {
+        const data = await res.json()
+        setReviews(data.reviews || [])
+      }
+    } catch (err) {
+      console.error('Error fetching reviews:', err)
+    } finally {
+      setReviewsLoading(false)
+    }
+  }
+
+  // Update review status
+  const updateReviewStatus = async (id: string, status: 'approved' | 'rejected') => {
+    try {
+      const res = await fetch('/api/reviews', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status })
+      })
+      if (res.ok) {
+        fetchReviews() // Refresh reviews
+      }
+    } catch (err) {
+      console.error('Error updating review:', err)
+    }
+  }
+
+  // Get status badge text and class
+  const getStatusBadgeInfo = (status: string) => {
+    switch (status) {
+      case 'pending': return { text: 'Bekliyor', className: 'status-badge-pending' }
+      case 'approved': return { text: 'Onaylandı', className: 'status-badge-approved' }
+      case 'rejected': return { text: 'Düzeltilecek', className: 'status-badge-rejected' }
+      default: return { text: status, className: '' }
+    }
+  }
+
+  // Get type badge text
+  const getTypeBadgeInfo = (type: string) => {
+    switch (type) {
+      case 'code': return { text: 'Kod', className: 'type-badge-code' }
+      case 'feature': return { text: 'Feature', className: 'type-badge-feature' }
+      case 'design': return { text: 'Tasarım', className: 'type-badge-design' }
+      case 'decision': return { text: 'Karar', className: 'type-badge-decision' }
+      default: return { text: type, className: '' }
+    }
+  }
+
+  // Parse diff for display
+  const parseDiff = (diff: string) => {
+    return diff.split('\n').map((line, index) => {
+      if (line.startsWith('- ')) {
+        return { type: 'removed', content: line.substring(2), index }
+      } else if (line.startsWith('+ ')) {
+        return { type: 'added', content: line.substring(2), index }
+      } else {
+        return { type: 'neutral', content: line, index }
+      }
+    })
+  }
+
+  // Milestone functions
+  const addMilestone = () => {
+    if (!newMilestone.title.trim()) return
+    const milestone: Milestone = {
+      id: Date.now().toString(),
+      title: newMilestone.title.trim(),
+      description: newMilestone.description.trim(),
+      status: 'planned',
+      dueDate: newMilestone.dueDate,
+      tasks: [],
+      projectId: activeProject || ''
+    }
+    setMilestones([...milestones, milestone])
+    setNewMilestone({ title: '', description: '', dueDate: '' })
+    setShowMilestoneForm(false)
+  }
+
+  const updateMilestone = (id: string, updates: Partial<Milestone>) => {
+    setMilestones(milestones.map(m => m.id === id ? { ...m, ...updates } : m))
+  }
+
+  const deleteMilestone = (id: string) => {
+    setMilestones(milestones.filter(m => m.id !== id))
+  }
+
+  const addTask = (milestoneId: string) => {
+    const text = newTaskText[milestoneId]?.trim()
+    if (!text) return
+    const task = { id: Date.now().toString(), text, done: false }
+    setMilestones(milestones.map(m => m.id === milestoneId ? { ...m, tasks: [...m.tasks, task] } : m))
+    setNewTaskText({ ...newTaskText, [milestoneId]: '' })
+  }
+
+  const toggleTask = (milestoneId: string, taskId: string) => {
+    setMilestones(milestones.map(m => m.id === milestoneId ? {
+      ...m,
+      tasks: m.tasks.map(t => t.id === taskId ? { ...t, done: !t.done } : t)
+    } : m))
+  }
+
+  const updateTaskText = (milestoneId: string, taskId: string, text: string) => {
+    setMilestones(milestones.map(m => m.id === milestoneId ? {
+      ...m,
+      tasks: m.tasks.map(t => t.id === taskId ? { ...t, text } : t)
+    } : m))
+  }
+
+  const deleteTask = (milestoneId: string, taskId: string) => {
+    setMilestones(milestones.map(m => m.id === milestoneId ? {
+      ...m,
+      tasks: m.tasks.filter(t => t.id !== taskId)
+    } : m))
+  }
+
+  const cycleStatus = (status: Milestone['status']): Milestone['status'] => {
+    const order: Milestone['status'][] = ['planned', 'in-progress', 'completed']
+    const nextIndex = (order.indexOf(status) + 1) % order.length
+    return order[nextIndex]
+  }
+
+  const getStatusLabel = (status: Milestone['status']) => {
+    switch (status) {
+      case 'planned': return 'Planlandı'
+      case 'in-progress': return 'Devam Ediyor'
+      case 'completed': return 'Tamamlandı'
+    }
+  }
+
+  const getStatusColor = (status: Milestone['status']) => {
+    switch (status) {
+      case 'planned': return 'var(--accent-cyan)'
+      case 'in-progress': return 'var(--accent-amber)'
+      case 'completed': return 'var(--accent-green)'
     }
   }
 
@@ -845,15 +1046,200 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
         )}
 
         {activeView === 'milestones' && (
-          <EmptyState 
-            icon={<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-purple)" strokeWidth="1.5">
-              <path d="M12 20V10"/>
-              <path d="M18 20V4"/>
-              <path d="M6 20v-4"/>
-            </svg>}
-            title="Henüz milestone yok"
-            description="Proje milestone'ları burada görünecek"
-          />
+          <div className="milestones-container">
+            {/* Header */}
+            <div className="milestones-header">
+              <button 
+                className="milestone-add-btn"
+                onClick={() => setShowMilestoneForm(!showMilestoneForm)}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="12" y1="5" x2="12" y2="19"/>
+                  <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                Yeni Milestone
+              </button>
+            </div>
+
+            {/* New Milestone Form */}
+            {showMilestoneForm && (
+              <div className="milestone-form">
+                <input
+                  type="text"
+                  placeholder="Milestone başlığı..."
+                  value={newMilestone.title}
+                  onChange={(e) => setNewMilestone({ ...newMilestone, title: e.target.value })}
+                  className="milestone-input"
+                  onKeyDown={(e) => e.key === 'Enter' && addMilestone()}
+                  autoFocus
+                />
+                <textarea
+                  placeholder="Açıklama (opsiyonel)..."
+                  value={newMilestone.description}
+                  onChange={(e) => setNewMilestone({ ...newMilestone, description: e.target.value })}
+                  className="milestone-textarea"
+                  rows={2}
+                />
+                <div className="milestone-form-row">
+                  <input
+                    type="date"
+                    value={newMilestone.dueDate}
+                    onChange={(e) => setNewMilestone({ ...newMilestone, dueDate: e.target.value })}
+                    className="milestone-date-input"
+                  />
+                  <div className="milestone-form-actions">
+                    <button className="milestone-btn secondary" onClick={() => setShowMilestoneForm(false)}>İptal</button>
+                    <button className="milestone-btn primary" onClick={addMilestone}>Kaydet</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Timeline */}
+            <div className="milestone-timeline">
+              {milestones.filter(m => !activeProject || m.projectId === activeProject || m.projectId === '').length === 0 ? (
+                <EmptyState 
+                  icon={<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-purple)" strokeWidth="1.5">
+                    <path d="M12 20V10"/>
+                    <path d="M18 20V4"/>
+                    <path d="M6 20v-4"/>
+                  </svg>}
+                  title="Henüz milestone yok"
+                  description="Yeni bir milestone ekleyerek projeye başlayın"
+                />
+              ) : (
+                milestones
+                  .filter(m => !activeProject || m.projectId === activeProject || m.projectId === '')
+                  .sort((a, b) => new Date(a.dueDate || '9999').getTime() - new Date(b.dueDate || '9999').getTime())
+                  .map((milestone) => (
+                    <div key={milestone.id} className="milestone-card">
+                      <div className={`milestone-dot ${milestone.status}`} />
+                      
+                      <div className="milestone-card-inner">
+                        {/* Card Header */}
+                        <div className="milestone-card-header">
+                          {editingMilestoneId === milestone.id ? (
+                            <input
+                              type="text"
+                              value={milestone.title}
+                              onChange={(e) => updateMilestone(milestone.id, { title: e.target.value })}
+                              onBlur={() => setEditingMilestoneId(null)}
+                              onKeyDown={(e) => e.key === 'Enter' && setEditingMilestoneId(null)}
+                              className="milestone-title-input"
+                              autoFocus
+                            />
+                          ) : (
+                            <h3 
+                              className="milestone-title"
+                              onClick={() => setEditingMilestoneId(milestone.id)}
+                              title="Düzenlemek için tıklayın"
+                            >
+                              {milestone.title}
+                              <svg className="edit-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                              </svg>
+                            </h3>
+                          )}
+                          <button 
+                            className="milestone-delete-btn"
+                            onClick={() => deleteMilestone(milestone.id)}
+                            title="Sil"
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <polyline points="3 6 5 6 21 6"/>
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                            </svg>
+                          </button>
+                        </div>
+
+                        {/* Status Badge */}
+                        <button
+                          className="milestone-status-badge"
+                          onClick={() => updateMilestone(milestone.id, { status: cycleStatus(milestone.status) })}
+                          style={{ 
+                            background: `${getStatusColor(milestone.status)}20`,
+                            color: getStatusColor(milestone.status),
+                            borderColor: `${getStatusColor(milestone.status)}40`
+                          }}
+                        >
+                          {getStatusLabel(milestone.status)}
+                        </button>
+
+                        {/* Description */}
+                        {milestone.description && (
+                          <p className="milestone-description">{milestone.description}</p>
+                        )}
+
+                        {/* Due Date */}
+                        {milestone.dueDate && (
+                          <div className="milestone-due-date">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                              <line x1="16" y1="2" x2="16" y2="6"/>
+                              <line x1="8" y1="2" x2="8" y2="6"/>
+                              <line x1="3" y1="10" x2="21" y2="10"/>
+                            </svg>
+                            {new Date(milestone.dueDate).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                          </div>
+                        )}
+
+                        {/* Tasks */}
+                        <div className="milestone-tasks">
+                          {milestone.tasks.map((task) => (
+                            <div key={task.id} className="milestone-task">
+                              <input
+                                type="checkbox"
+                                checked={task.done}
+                                onChange={() => toggleTask(milestone.id, task.id)}
+                                className="milestone-task-checkbox"
+                              />
+                              <input
+                                type="text"
+                                value={task.text}
+                                onChange={(e) => updateTaskText(milestone.id, task.id, e.target.value)}
+                                className={`milestone-task-input ${task.done ? 'done' : ''}`}
+                              />
+                              <button
+                                className="milestone-task-delete"
+                                onClick={() => deleteTask(milestone.id, task.id)}
+                              >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <line x1="18" y1="6" x2="6" y2="18"/>
+                                  <line x1="6" y1="6" x2="18" y2="18"/>
+                                </svg>
+                              </button>
+                            </div>
+                          ))}
+                          
+                          {/* Add Task */}
+                          <div className="milestone-task-add">
+                            <input
+                              type="text"
+                              placeholder="Yeni görev..."
+                              value={newTaskText[milestone.id] || ''}
+                              onChange={(e) => setNewTaskText({ ...newTaskText, [milestone.id]: e.target.value })}
+                              onKeyDown={(e) => e.key === 'Enter' && addTask(milestone.id)}
+                              className="milestone-task-input new"
+                            />
+                            <button
+                              className="milestone-task-add-btn"
+                              onClick={() => addTask(milestone.id)}
+                            >
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <line x1="12" y1="5" x2="12" y2="19"/>
+                                <line x1="5" y1="12" x2="19" y2="12"/>
+                              </svg>
+                              Ekle
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+              )}
+            </div>
+          </div>
         )}
 
         {activeView === 'agents' && (
@@ -919,14 +1305,145 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
         )}
 
         {activeView === 'reviews' && (
-          <EmptyState 
-            icon={<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-green)" strokeWidth="1.5">
-              <path d="M9 11l3 3L22 4"/>
-              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-            </svg>}
-            title="Review bekleyen görev yok"
-            description="Tüm review'lar tamamlandı"
-          />
+          <div className="reviews-container">
+            {/* Reviews Header */}
+            <div className="reviews-header">
+              <div className="reviews-title">
+                {reviewsLoading ? (
+                  <span className="reviews-loading">Yükleniyor...</span>
+                ) : (
+                  <>
+                    <span>{reviews.filter(r => r.status === 'pending').length} review bekliyor</span>
+                    <span className="reviews-subtitle">
+                      {reviews.filter(r => r.status === 'approved').length} onaylandı · {reviews.filter(r => r.status === 'rejected').length} düzeltilecek
+                    </span>
+                  </>
+                )}
+              </div>
+              {/* Filter Buttons */}
+              <div className="reviews-filter">
+                {(['all', 'pending', 'approved', 'rejected'] as ReviewFilter[]).map((filter) => (
+                  <button
+                    key={filter}
+                    className={`filter-btn ${reviewFilter === filter ? 'active' : ''}`}
+                    onClick={() => setReviewFilter(filter)}
+                  >
+                    {filter === 'all' && 'Tümü'}
+                    {filter === 'pending' && 'Bekliyor'}
+                    {filter === 'approved' && 'Onaylanan'}
+                    {filter === 'rejected' && 'Düzeltilen'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Reviews List */}
+            {reviewsLoading ? (
+              <div className="reviews-loading-state">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="spin">
+                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                </svg>
+                Review'lar yükleniyor...
+              </div>
+            ) : reviews.length === 0 ? (
+              <EmptyState 
+                icon={<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-green)" strokeWidth="1.5">
+                  <path d="M9 11l3 3L22 4"/>
+                  <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                </svg>}
+                title={reviewFilter === 'all' ? "Review bekleyen görev yok" : "Bu filtreye uygun review yok"}
+                description={reviewFilter === 'all' ? "Tüm review'lar tamamlandı" : "Farklı bir filtre deneyin"}
+              />
+            ) : (
+              <div className="reviews-list">
+                {reviews.map((review) => {
+                  const statusInfo = getStatusBadgeInfo(review.status)
+                  const typeInfo = getTypeBadgeInfo(review.type)
+                  return (
+                    <div key={review.id} className={`review-card ${review.status}`}>
+                      <div className="review-card-header">
+                        <div className="review-card-titles">
+                          <div className="review-card-title-row">
+                            <h3 className="review-card-title">{review.title}</h3>
+                            <span className={`type-badge ${typeInfo.className}`}>{typeInfo.text}</span>
+                            <span className={`status-badge ${statusInfo.className}`}>{statusInfo.text}</span>
+                          </div>
+                          <p className="review-card-description">{review.description}</p>
+                          <div className="review-card-meta">
+                            <span className="meta-agent">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                <circle cx="12" cy="7" r="4"/>
+                              </svg>
+                              {review.agent}
+                            </span>
+                            <span className="meta-project">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                              </svg>
+                              {review.project}
+                            </span>
+                            <span className="meta-time">{timeAgo(review.created_at)}</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Diff Display */}
+                      {review.diff && (
+                        <div className="review-diff">
+                          <div className="diff-header">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <polyline points="16 18 22 12 16 6"/>
+                              <polyline points="8 6 2 12 8 18"/>
+                            </svg>
+                            Kod Değişiklikleri
+                          </div>
+                          <div className="diff-content">
+                            {parseDiff(review.diff).map((line) => (
+                              <div 
+                                key={line.index} 
+                                className={`diff-line ${line.type === 'removed' ? 'diff-line-removed' : line.type === 'added' ? 'diff-line-added' : 'diff-line-neutral'}`}
+                              >
+                                <span className="diff-line-marker">
+                                  {line.type === 'removed' ? '-' : line.type === 'added' ? '+' : ' '}
+                                </span>
+                                <span className="diff-line-content">{line.content || ' '}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Action Buttons */}
+                      {review.status === 'pending' && (
+                        <div className="review-card-actions">
+                          <button 
+                            className="review-btn approve"
+                            onClick={() => updateReviewStatus(review.id, 'approved')}
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            Onayla
+                          </button>
+                          <button 
+                            className="review-btn reject"
+                            onClick={() => updateReviewStatus(review.id, 'rejected')}
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                            Düzelt
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         )}
       </div>
 
@@ -1625,6 +2142,338 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
           display: flex; align-items: center; justify-content: space-between;
           padding: 14px 20px; background: rgba(0,0,0,0.3); border-bottom: 1px solid var(--glass-border);
           font-size: 14px; font-weight: 600; color: var(--text-primary);
+        }
+
+        /* Milestones Styles */
+        .milestones-container {
+          padding: 8px 0;
+          max-width: 800px;
+        }
+        .milestones-header {
+          display: flex;
+          justify-content: flex-end;
+          margin-bottom: 20px;
+        }
+        .milestone-add-btn {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 18px;
+          background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+          border: none;
+          border-radius: 8px;
+          color: white;
+          font-size: 13px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+        .milestone-add-btn:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(0, 212, 255, 0.3);
+        }
+        .milestone-form {
+          background: rgba(0,0,0,0.2);
+          border: 1px solid var(--glass-border);
+          border-radius: 12px;
+          padding: 16px;
+          margin-bottom: 20px;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        .milestone-input {
+          background: rgba(0,0,0,0.3);
+          border: 1px solid var(--glass-border);
+          border-radius: 8px;
+          padding: 10px 14px;
+          color: var(--text-primary);
+          font-size: 14px;
+          outline: none;
+        }
+        .milestone-input:focus {
+          border-color: var(--accent-cyan);
+        }
+        .milestone-textarea {
+          background: rgba(0,0,0,0.3);
+          border: 1px solid var(--glass-border);
+          border-radius: 8px;
+          padding: 10px 14px;
+          color: var(--text-primary);
+          font-size: 13px;
+          outline: none;
+          resize: vertical;
+          font-family: inherit;
+        }
+        .milestone-textarea:focus {
+          border-color: var(--accent-cyan);
+        }
+        .milestone-form-row {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        .milestone-date-input {
+          background: rgba(0,0,0,0.3);
+          border: 1px solid var(--glass-border);
+          border-radius: 8px;
+          padding: 10px 14px;
+          color: var(--text-primary);
+          font-size: 13px;
+          outline: none;
+          color-scheme: dark;
+        }
+        .milestone-date-input:focus {
+          border-color: var(--accent-cyan);
+        }
+        .milestone-form-actions {
+          display: flex;
+          gap: 8px;
+          margin-left: auto;
+        }
+        .milestone-btn {
+          padding: 8px 16px;
+          border-radius: 6px;
+          font-size: 12px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          border: none;
+        }
+        .milestone-btn.primary {
+          background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+          color: white;
+        }
+        .milestone-btn.secondary {
+          background: rgba(255,255,255,0.05);
+          color: var(--text-secondary);
+          border: 1px solid var(--glass-border);
+        }
+        .milestone-btn:hover {
+          opacity: 0.9;
+        }
+        .milestone-timeline {
+          position: relative;
+          padding-left: 24px;
+        }
+        .milestone-timeline::before {
+          content: '';
+          position: absolute;
+          left: 8px;
+          top: 0;
+          bottom: 0;
+          width: 2px;
+          background: rgba(255,255,255,0.1);
+        }
+        .milestone-card {
+          position: relative;
+          margin-bottom: 16px;
+        }
+        .milestone-dot {
+          position: absolute;
+          left: -20px;
+          top: 12px;
+          width: 12px;
+          height: 12px;
+          border-radius: 50%;
+          border: 2px solid var(--accent-cyan);
+          background: var(--glass-bg);
+          z-index: 1;
+        }
+        .milestone-dot.completed {
+          background: var(--accent-green);
+          border-color: var(--accent-green);
+        }
+        .milestone-dot.in-progress {
+          background: var(--accent-amber);
+          border-color: var(--accent-amber);
+        }
+        .milestone-card-inner {
+          background: rgba(0,0,0,0.2);
+          border: 1px solid var(--glass-border);
+          border-radius: 12px;
+          padding: 16px;
+          transition: all 0.2s ease;
+        }
+        .milestone-card-inner:hover {
+          border-color: var(--glass-border-hover);
+        }
+        .milestone-card-header {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          margin-bottom: 10px;
+        }
+        .milestone-title {
+          font-size: 16px;
+          font-weight: 600;
+          margin: 0;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          cursor: pointer;
+          color: var(--text-primary);
+        }
+        .milestone-title:hover {
+          color: var(--accent-cyan);
+        }
+        .milestone-title:hover .edit-icon {
+          opacity: 1;
+        }
+        .milestone-title-input {
+          font-size: 16px;
+          font-weight: 600;
+          background: rgba(0,0,0,0.3);
+          border: 1px solid var(--accent-cyan);
+          border-radius: 6px;
+          padding: 4px 8px;
+          color: var(--text-primary);
+          outline: none;
+          flex: 1;
+        }
+        .milestone-delete-btn {
+          background: rgba(239, 68, 68, 0.1);
+          border: 1px solid rgba(239, 68, 68, 0.3);
+          border-radius: 6px;
+          color: var(--accent-red);
+          width: 28px;
+          height: 28px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+        .milestone-delete-btn:hover {
+          background: rgba(239, 68, 68, 0.2);
+          border-color: rgba(239, 68, 68, 0.5);
+        }
+        .milestone-status-badge {
+          display: inline-flex;
+          align-items: center;
+          padding: 4px 10px;
+          border-radius: 12px;
+          font-size: 11px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          cursor: pointer;
+          border: 1px solid transparent;
+          transition: all 0.2s ease;
+          margin-bottom: 10px;
+        }
+        .milestone-status-badge:hover {
+          opacity: 0.8;
+        }
+        .milestone-description {
+          font-size: 13px;
+          color: var(--text-secondary);
+          margin: 0 0 10px 0;
+          line-height: 1.5;
+        }
+        .milestone-due-date {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 12px;
+          color: var(--text-tertiary);
+          margin-bottom: 12px;
+        }
+        .milestone-tasks {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .milestone-task {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          background: rgba(255,255,255,0.03);
+          border: 1px solid var(--glass-border);
+          border-radius: 8px;
+          padding: 8px 10px;
+        }
+        .milestone-task-checkbox {
+          width: 16px;
+          height: 16px;
+          accent-color: var(--accent-green);
+          cursor: pointer;
+        }
+        .milestone-task-input {
+          flex: 1;
+          background: transparent;
+          border: none;
+          color: var(--text-primary);
+          font-size: 13px;
+          outline: none;
+        }
+        .milestone-task-input.done {
+          text-decoration: line-through;
+          color: var(--text-tertiary);
+        }
+        .milestone-task-input.new {
+          color: var(--text-secondary);
+        }
+        .milestone-task-input.new::placeholder {
+          color: var(--text-tertiary);
+        }
+        .milestone-task-delete {
+          background: none;
+          border: none;
+          color: var(--text-tertiary);
+          cursor: pointer;
+          padding: 2px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          opacity: 0;
+          transition: opacity 0.2s ease;
+        }
+        .milestone-task:hover .milestone-task-delete {
+          opacity: 1;
+        }
+        .milestone-task-delete:hover {
+          color: var(--accent-red);
+        }
+        .milestone-task-add {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          background: rgba(255,255,255,0.02);
+          border: 1px dashed var(--glass-border);
+          border-radius: 8px;
+          padding: 8px 10px;
+        }
+        .milestone-task-add-btn {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          background: none;
+          border: none;
+          color: var(--accent-cyan);
+          font-size: 12px;
+          font-weight: 500;
+          cursor: pointer;
+          padding: 2px 6px;
+          border-radius: 4px;
+          transition: all 0.2s ease;
+        }
+        .milestone-task-add-btn:hover {
+          background: rgba(0, 212, 255, 0.1);
+        }
+        @media (max-width: 640px) {
+          .milestone-form-row {
+            flex-direction: column;
+            align-items: stretch;
+          }
+          .milestone-form-actions {
+            margin-left: 0;
+            justify-content: flex-end;
+          }
+          .milestone-task-delete {
+            opacity: 1;
+          }
         }
       `}</style>
     </main>

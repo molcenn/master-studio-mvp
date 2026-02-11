@@ -3,6 +3,35 @@
 import { useChat } from '@/lib/hooks/useChat'
 import { useState, useRef } from 'react'
 
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+function renderMarkdown(text: string): string {
+  return text
+    // Code blocks: ```lang\ncode\n``` → <pre> with dark bg
+    .replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) =>
+      `<div class="chat-code-block"><div class="chat-code-header">${lang || 'code'}</div><pre class="chat-code-content">${escapeHtml(code.trim())}</pre></div>`)
+    // Inline code: `code` → <code>
+    .replace(/`([^`]+)`/g, '<code class="chat-inline-code">$1</code>')
+    // Bold: **text** → <strong>
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    // Italic: *text* → <em>
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+    // Headers: ### text → h3
+    .replace(/^### (.+)$/gm, '<div class="chat-heading h3">$1</div>')
+    .replace(/^## (.+)$/gm, '<div class="chat-heading h2">$1</div>')
+    .replace(/^# (.+)$/gm, '<div class="chat-heading h1">$1</div>')
+    // Bullet lists: - item → li
+    .replace(/^- (.+)$/gm, '<div class="chat-list-item">• $1</div>')
+    // Numbered lists: 1. item → li
+    .replace(/^\d+\. (.+)$/gm, '<div class="chat-list-item-num">$1</div>')
+    // Paragraphs: double newline
+    .replace(/\n\n/g, '<div class="chat-paragraph-break"></div>')
+    // Single newline → <br>
+    .replace(/\n/g, '<br/>')
+}
+
 interface ChatPanelProps {
   projectId?: string
 }
@@ -92,7 +121,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
                       </span>
                     </div>
                   )}
-                  <div>{msg.content}</div>
+                  <div dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }} />
                   
                   {msg.type === 'file' && msg.file_info && (
                     <div className="file-preview-card">
@@ -132,7 +161,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
                   <span className="message-model">{MODEL_DISPLAY_NAMES[selectedModel]}</span>
                   <span className="message-time">şimdi</span>
                 </div>
-                <div>{streamingContent}</div>
+                <div dangerouslySetInnerHTML={{ __html: renderMarkdown(streamingContent) }} />
               </div>
             )}
             
@@ -523,6 +552,43 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
           border-color: var(--accent-cyan); color: var(--accent-cyan);
         }
         .hidden { display: none; }
+        .chat-code-block {
+          background: rgba(0,0,0,0.4);
+          border: 1px solid rgba(255,255,255,0.08);
+          border-radius: 8px;
+          margin: 8px 0;
+          overflow: hidden;
+        }
+        .chat-code-header {
+          padding: 6px 12px;
+          background: rgba(0,0,0,0.3);
+          font-size: 10px;
+          color: var(--text-tertiary);
+          text-transform: uppercase;
+          font-weight: 600;
+          border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .chat-code-content {
+          padding: 12px;
+          margin: 0;
+          font-family: 'SF Mono', Monaco, monospace;
+          font-size: 12px;
+          line-height: 1.5;
+          overflow-x: auto;
+          color: #e0e0e0;
+        }
+        .chat-inline-code {
+          background: rgba(255,255,255,0.08);
+          padding: 2px 6px;
+          border-radius: 4px;
+          font-family: 'SF Mono', Monaco, monospace;
+          font-size: 12px;
+        }
+        .chat-heading.h1 { font-size: 16px; font-weight: 700; margin: 8px 0 4px; }
+        .chat-heading.h2 { font-size: 14px; font-weight: 600; margin: 6px 0 4px; }
+        .chat-heading.h3 { font-size: 13px; font-weight: 600; margin: 4px 0 2px; color: var(--accent-cyan); }
+        .chat-list-item, .chat-list-item-num { padding-left: 8px; margin: 2px 0; }
+        .chat-paragraph-break { height: 8px; }
       `}</style>
     </aside>
   )

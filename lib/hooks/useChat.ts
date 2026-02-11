@@ -223,7 +223,7 @@ export function useChat({ projectId, model }: UseChatOptions) {
       setStreamingContent('')
       streamingContentRef.current = ''
     }
-  }, [projectId, session, messages])
+  }, [projectId, session, messages, model])
 
   // Upload file
   const uploadFile = useCallback(async (file: File) => {

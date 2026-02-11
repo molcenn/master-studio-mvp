@@ -13,6 +13,7 @@ export default function Dashboard() {
   const { data: session, status } = useSession()
   const [activeProject, setActiveProject] = useState('00000000-0000-0000-0000-000000000001')
   const [activeView, setActiveView] = useState<ViewType>('dashboard')
+  const [chatWidth, setChatWidth] = useState(380)
 
   if (status === 'loading') {
     return (
@@ -30,7 +31,7 @@ export default function Dashboard() {
     <div 
       className="grid h-screen"
       style={{ 
-        gridTemplateColumns: '260px 1fr 380px',
+        gridTemplateColumns: `260px 1fr ${chatWidth}px`,
         position: 'relative',
         zIndex: 1 
       }}
@@ -47,6 +48,25 @@ export default function Dashboard() {
         activeView={activeView}
         setActiveProject={setActiveProject}
         setActiveView={setActiveView}
+      />
+      <div 
+        className="resize-handle"
+        onMouseDown={(e) => {
+          e.preventDefault()
+          const startX = e.clientX
+          const startWidth = chatWidth
+          const onMouseMove = (e: MouseEvent) => {
+            const diff = startX - e.clientX
+            const newWidth = Math.min(700, Math.max(300, startWidth + diff))
+            setChatWidth(newWidth)
+          }
+          const onMouseUp = () => {
+            document.removeEventListener('mousemove', onMouseMove)
+            document.removeEventListener('mouseup', onMouseUp)
+          }
+          document.addEventListener('mousemove', onMouseMove)
+          document.addEventListener('mouseup', onMouseUp)
+        }}
       />
       <ChatPanel projectId={activeProject} />
     </div>

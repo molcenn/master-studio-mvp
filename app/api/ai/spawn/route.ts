@@ -18,32 +18,44 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // Gateway chat endpoint'ine "sub-agent başlat" komutu gönder
-    const response = await fetch(`${OPENCLAW_URL}/v1/chat/completions`, {
+    // Gateway /tools/invoke endpoint'i ile doğrudan sessions_spawn çağır
+    const response = await fetch(`${OPENCLAW_URL}/tools/invoke`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${OPENCLAW_TOKEN}`,
-        'x-openclaw-agent-id': 'main',
       },
       body: JSON.stringify({
-        model: model || 'moonshot/kimi-k2.5',
-        messages: [
-          { role: 'system', content: 'Sen Master Studio Dashboard\'un agent swarm yöneticisisin. Kullanıcı sana bir görev verdiğinde, sessions_spawn tool\'unu kullanarak sub-agent başlat. Görev tamamlandığında sonucu bildir.' },
-          { role: 'user', content: `Bu görevi bir sub-agent ile çalıştır:\n\n${task}\n\nModel: ${model || 'moonshot/kimi-k2.5'}` }
-        ],
-        stream: false,
+        tool: 'sessions_spawn',
+        args: {
+          task,
+          model: model || 'moonshot/kimi-k2.5',
+          label: label || 'Dashboard Task',
+          agentId: 'main',
+          runTimeoutSeconds: 300,
+        },
       }),
     })
 
     const data = await response.json()
     
-    return NextResponse.json({
-      success: true,
-      message: 'Sub-agent görevi başlatıldı',
-      response: data.choices?.[0]?.message?.content || 'Görev gönderildi'
-    })
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    if (data.ok) {
+      const details = data.result?.details || data.result
+      return NextResponse.json({
+        success: true,
+        message: 'Sub-agent başlatıldı',
+        sessionKey: details?.childSessionKey,
+        runId: details?.runId,
+        model: model || 'moonshot/kimi-k2.5',
+      })
+    } else {
+      return NextResponse.json({ 
+        error: data.error?.message || 'Spawn failed',
+        details: data 
+      }, { status: 400 })
+    }
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : 'Unknown error'
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }

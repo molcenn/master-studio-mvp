@@ -366,7 +366,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
 
   // Fetch recent messages for workspace view
   const fetchRecentMessages = async () => {
-    // Her zaman aktif projeden mesaj çek - default project ID bile olsa
+    // Always fetch messages from active project - even if default project ID
     const projectId = activeProject || DEFAULT_PROJECT_ID
     try {
       const res = await fetch(`/api/chat?projectId=${projectId}`)
@@ -428,17 +428,17 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
       const res = await fetch(`/api/chat?projectId=${projectId}`)
       if (!res.ok) return
       const data = await res.json()
-      // Tüm mesajları kontrol et (user + assistant + agent) - sadece assistant değil
+      // Check all messages (user + assistant + agent) - not just assistant
       const msgs = (data.messages || [])
       const blocks: {lang: string, code: string}[] = []
       const regex = /```(\w*)\n?([\s\S]*?)```/g
-      // Son 10 mesajı kontrol et - daha fazla kod bloğu bulmak için
+      // Check last 10 messages - to find more code blocks
       for (const msg of [...msgs].reverse().slice(0, 10)) {
         let match
         while ((match = regex.exec(msg.content)) !== null) {
           const lang = match[1].trim().toLowerCase()
           const code = match[2].trim()
-          // HTML, CSS, JS ve diğer yaygın dilleri destekle
+          // Support HTML, CSS, JS and other common languages
           if (lang && code) {
             blocks.push({ lang, code })
           }
@@ -849,6 +849,15 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                     </svg>
                     Details
                   </button>
+                  <button className={`ide-tab ${ideTab === 'milestones' ? 'active' : ''}`} onClick={() => setIdeTab('milestones')}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/>
+                    </svg>
+                    Milestones
+                    {milestones.filter(m => !activeProject || m.projectId === activeProject || m.projectId === '').length > 0 && (
+                      <span className="ide-badge">{milestones.filter(m => !activeProject || m.projectId === activeProject || m.projectId === '').length}</span>
+                    )}
+                  </button>
                 </div>
 
                 {/* CODE TAB */}
@@ -1027,6 +1036,279 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                         <button className="modal-btn secondary" onClick={() => setShowDeleteModal(false)} disabled={isDeleting}>Cancel</button>
                         <button className="modal-btn danger" onClick={deleteProject} disabled={isDeleting}>{isDeleting ? 'Deleting...' : 'Yes, Delete'}</button>
                       </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* MILESTONES TAB */}
+                {ideTab === 'milestones' && (
+                  <div className="ide-milestones-panel" style={{ flex: 1, overflow: 'auto', padding: '20px' }}>
+                    {/* Header */}
+                    <div className="milestones-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                      <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Project Milestones</h3>
+                      <button 
+                        className="milestone-add-btn"
+                        onClick={() => setShowMilestoneForm(!showMilestoneForm)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px',
+                          background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-purple))',
+                          border: 'none', borderRadius: '8px', color: 'white', fontSize: '13px',
+                          fontWeight: 500, cursor: 'pointer'
+                        }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                        New Milestone
+                      </button>
+                    </div>
+
+                    {/* New Milestone Form */}
+                    {showMilestoneForm && (
+                      <div className="milestone-form" style={{
+                        background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)',
+                        borderRadius: '12px', padding: '16px', marginBottom: '20px',
+                        display: 'flex', flexDirection: 'column', gap: '12px'
+                      }}>
+                        <input
+                          type="text"
+                          placeholder="Milestone title..."
+                          value={newMilestone.title}
+                          onChange={(e) => setNewMilestone({ ...newMilestone, title: e.target.value })}
+                          style={{
+                            background: 'rgba(0,0,0,0.3)', border: '1px solid var(--glass-border)',
+                            borderRadius: '8px', padding: '10px 14px', color: 'var(--text-primary)',
+                            fontSize: '14px', outline: 'none'
+                          }}
+                          onKeyDown={(e) => e.key === 'Enter' && addMilestone()}
+                          autoFocus
+                        />
+                        <textarea
+                          placeholder="Description (optional)..."
+                          value={newMilestone.description}
+                          onChange={(e) => setNewMilestone({ ...newMilestone, description: e.target.value })}
+                          style={{
+                            background: 'rgba(0,0,0,0.3)', border: '1px solid var(--glass-border)',
+                            borderRadius: '8px', padding: '10px 14px', color: 'var(--text-primary)',
+                            fontSize: '13px', outline: 'none', resize: 'vertical', fontFamily: 'inherit'
+                          }}
+                          rows={2}
+                        />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                          <input
+                            type="date"
+                            value={newMilestone.dueDate}
+                            onChange={(e) => setNewMilestone({ ...newMilestone, dueDate: e.target.value })}
+                            style={{
+                              background: 'rgba(0,0,0,0.3)', border: '1px solid var(--glass-border)',
+                              borderRadius: '8px', padding: '10px 14px', color: 'var(--text-primary)',
+                              fontSize: '13px', outline: 'none', colorScheme: 'dark'
+                            }}
+                          />
+                          <div style={{ display: 'flex', gap: '8px', marginLeft: 'auto' }}>
+                            <button 
+                              onClick={() => setShowMilestoneForm(false)}
+                              style={{
+                                padding: '8px 16px', borderRadius: '6px', fontSize: '12px',
+                                fontWeight: 500, cursor: 'pointer', border: '1px solid var(--glass-border)',
+                                background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)'
+                              }}
+                            >Cancel</button>
+                            <button 
+                              onClick={addMilestone}
+                              style={{
+                                padding: '8px 16px', borderRadius: '6px', fontSize: '12px',
+                                fontWeight: 500, cursor: 'pointer', border: 'none',
+                                background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-purple))',
+                                color: 'white'
+                              }}
+                            >Save</button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Timeline */}
+                    <div className="milestone-timeline" style={{ position: 'relative', paddingLeft: '24px' }}>
+                      <div style={{
+                        content: '""', position: 'absolute', left: '8px', top: 0, bottom: 0,
+                        width: '2px', background: 'rgba(255,255,255,0.1)'
+                      }} />
+                      {milestones.filter(m => !activeProject || m.projectId === activeProject || m.projectId === '').length === 0 ? (
+                        <div style={{
+                          display: 'flex', flexDirection: 'column', alignItems: 'center',
+                          justifyContent: 'center', padding: '48px', textAlign: 'center',
+                          background: 'var(--glass-bg)', border: '1px solid var(--glass-border)',
+                          borderRadius: '16px'
+                        }}>
+                          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-purple)" strokeWidth="1.5">
+                            <path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/>
+                          </svg>
+                          <div style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', marginTop: '16px', marginBottom: '8px' }}>No milestones yet</div>
+                          <div style={{ fontSize: '14px', color: 'var(--text-tertiary)' }}>Add a milestone to get started</div>
+                        </div>
+                      ) : (
+                        milestones
+                          .filter(m => !activeProject || m.projectId === activeProject || m.projectId === '')
+                          .sort((a, b) => new Date(a.dueDate || '9999').getTime() - new Date(b.dueDate || '9999').getTime())
+                          .map((milestone) => (
+                            <div key={milestone.id} style={{ position: 'relative', marginBottom: '16px' }}>
+                              <div style={{
+                                position: 'absolute', left: '-20px', top: '12px', width: '12px', height: '12px',
+                                borderRadius: '50%', border: '2px solid var(--accent-cyan)',
+                                background: milestone.status === 'completed' ? 'var(--accent-green)' : milestone.status === 'in-progress' ? 'var(--accent-amber)' : 'var(--glass-bg)',
+                                zIndex: 1
+                              }} />
+                              <div style={{
+                                background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)',
+                                borderRadius: '12px', padding: '16px'
+                              }}>
+                                {/* Card Header */}
+                                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '10px' }}>
+                                  {editingMilestoneId === milestone.id ? (
+                                    <input
+                                      type="text"
+                                      value={milestone.title}
+                                      onChange={(e) => updateMilestone(milestone.id, { title: e.target.value })}
+                                      onBlur={() => setEditingMilestoneId(null)}
+                                      onKeyDown={(e) => e.key === 'Enter' && setEditingMilestoneId(null)}
+                                      style={{
+                                        fontSize: '16px', fontWeight: 600, background: 'rgba(0,0,0,0.3)',
+                                        border: '1px solid var(--accent-cyan)', borderRadius: '6px',
+                                        padding: '4px 8px', color: 'var(--text-primary)', outline: 'none', flex: 1
+                                      }}
+                                      autoFocus
+                                    />
+                                  ) : (
+                                    <h3 
+                                      style={{ fontSize: '16px', fontWeight: 600, margin: 0, display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)' }}
+                                      onClick={() => setEditingMilestoneId(milestone.id)}
+                                      title="Click to edit"
+                                    >
+                                      {milestone.title}
+                                    </h3>
+                                  )}
+                                  <button 
+                                    onClick={() => deleteMilestone(milestone.id)}
+                                    title="Delete"
+                                    style={{
+                                      background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)',
+                                      borderRadius: '6px', color: 'var(--accent-red)', width: '28px', height: '28px',
+                                      display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
+                                    }}
+                                  >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <polyline points="3 6 5 6 21 6"/>
+                                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                                    </svg>
+                                  </button>
+                                </div>
+
+                                {/* Status Badge */}
+                                <button
+                                  onClick={() => updateMilestone(milestone.id, { status: cycleStatus(milestone.status) })}
+                                  style={{ 
+                                    background: `${getStatusColor(milestone.status)}20`, color: getStatusColor(milestone.status),
+                                    border: `1px solid ${getStatusColor(milestone.status)}40`, borderRadius: '12px',
+                                    padding: '4px 10px', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase',
+                                    letterSpacing: '0.5px', cursor: 'pointer', marginBottom: '10px'
+                                  }}
+                                >
+                                  {getStatusLabel(milestone.status)}
+                                </button>
+
+                                {/* Description */}
+                                {milestone.description && (
+                                  <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 10px 0', lineHeight: 1.5 }}>{milestone.description}</p>
+                                )}
+
+                                {/* Due Date */}
+                                {milestone.dueDate && (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '12px' }}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                                      <line x1="16" y1="2" x2="16" y2="6"/>
+                                      <line x1="8" y1="2" x2="8" y2="6"/>
+                                      <line x1="3" y1="10" x2="21" y2="10"/>
+                                    </svg>
+                                    {new Date(milestone.dueDate).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}
+                                  </div>
+                                )}
+
+                                {/* Tasks */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                  {milestone.tasks.map((task) => (
+                                    <div key={task.id} style={{
+                                      display: 'flex', alignItems: 'center', gap: '8px',
+                                      background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)',
+                                      borderRadius: '8px', padding: '8px 10px'
+                                    }}>
+                                      <input
+                                        type="checkbox"
+                                        checked={task.done}
+                                        onChange={() => toggleTask(milestone.id, task.id)}
+                                        style={{ width: '16px', height: '16px', accentColor: 'var(--accent-green)', cursor: 'pointer' }}
+                                      />
+                                      <input
+                                        type="text"
+                                        value={task.text}
+                                        onChange={(e) => updateTaskText(milestone.id, task.id, e.target.value)}
+                                        style={{
+                                          flex: 1, background: 'transparent', border: 'none',
+                                          color: task.done ? 'var(--text-tertiary)' : 'var(--text-primary)',
+                                          fontSize: '13px', outline: 'none', textDecoration: task.done ? 'line-through' : 'none'
+                                        }}
+                                      />
+                                      <button
+                                        onClick={() => deleteTask(milestone.id, task.id)}
+                                        style={{
+                                          background: 'none', border: 'none', color: 'var(--text-tertiary)',
+                                          cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                        }}
+                                      >
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                                        </svg>
+                                      </button>
+                                    </div>
+                                  ))}
+                                  
+                                  {/* Add Task */}
+                                  <div style={{
+                                    display: 'flex', alignItems: 'center', gap: '8px',
+                                    background: 'rgba(255,255,255,0.02)', border: '1px dashed var(--glass-border)',
+                                    borderRadius: '8px', padding: '8px 10px'
+                                  }}>
+                                    <input
+                                      type="text"
+                                      placeholder="New task..."
+                                      value={newTaskText[milestone.id] || ''}
+                                      onChange={(e) => setNewTaskText({ ...newTaskText, [milestone.id]: e.target.value })}
+                                      onKeyDown={(e) => e.key === 'Enter' && addTask(milestone.id)}
+                                      style={{
+                                        flex: 1, background: 'transparent', border: 'none',
+                                        color: 'var(--text-primary)', fontSize: '13px', outline: 'none'
+                                      }}
+                                    />
+                                    <button
+                                      onClick={() => addTask(milestone.id)}
+                                      style={{
+                                        display: 'flex', alignItems: 'center', gap: '4px', background: 'none',
+                                        border: 'none', color: 'var(--accent-cyan)', fontSize: '12px',
+                                        fontWeight: 500, cursor: 'pointer', padding: '2px 6px', borderRadius: '4px'
+                                      }}
+                                    >
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                                      </svg>
+                                      Add
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                      )}
                     </div>
                   </div>
                 )}
@@ -1392,7 +1674,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                               <polyline points="20 6 9 17 4 12"/>
                             </svg>
-                            Onayla
+                            Approve
                           </button>
                           <button 
                             className="review-btn reject"
@@ -1402,7 +1684,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                             </svg>
-                            Düzelt
+                            Fix
                           </button>
                         </div>
                       )}

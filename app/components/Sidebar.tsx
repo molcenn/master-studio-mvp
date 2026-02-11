@@ -13,7 +13,7 @@ interface SidebarProps {
 }
 
 const projects = [
-  { id: 'ai-agent-dashboard', name: 'AI Agent Dashboard', dot: '#00d4ff' },
+  { id: '00000000-0000-0000-0000-000000000001', name: 'AI Agent Dashboard', dot: '#00d4ff' },
   { id: 'lansman-videosu', name: 'Lansman Videosu', dot: '#a855f7' },
   { id: 'deneyim-merkezi', name: 'Deneyim Merkezi UI', dot: '#ec4899' },
   { id: 'e-ticaret', name: 'E-ticaret Redesign', dot: '#22c55e' },

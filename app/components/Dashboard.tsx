@@ -9,7 +9,7 @@ import ChatPanel from './ChatPanel'
 
 export default function Dashboard() {
   const { data: session, status } = useSession()
-  const [activeProject, setActiveProject] = useState('ai-agent-dashboard')
+  const [activeProject, setActiveProject] = useState('00000000-0000-0000-0000-000000000001')
 
   if (status === 'loading') {
     return (

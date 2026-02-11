@@ -1002,7 +1002,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                               <div className="message-avatar">{msg.role === 'user' ? 'U' : 'AI'}</div>
                               <div className="message-content">
                                 <div className="message-header">
-                                  <span className="message-role">{msg.role === 'user' ? 'Kullanıcı' : 'AI'}</span>
+                                  <span className="message-role">{msg.role === 'user' ? 'User' : 'AI'}</span>
                                   <span className="message-time">{timeAgo(msg.created_at)}</span>
                                 </div>
                                 <p className="message-text">{msg.content.length > 120 ? msg.content.slice(0, 120) + '...' : msg.content}</p>
@@ -1019,13 +1019,13 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                 {showDeleteModal && (
                   <div className="modal-overlay" onClick={() => setShowDeleteModal(false)}>
                     <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                      <h3 className="modal-title">Projeyi Sil</h3>
+                      <h3 className="modal-title">Delete Project</h3>
                       <p className="modal-desc">
-                        <strong>"{activeProjectData?.name}"</strong> projesini silmek istediğinize emin misiniz?<br />Bu işlem geri alınamaz.
+                        Are you sure you want to delete <strong>"{activeProjectData?.name}"</strong>?<br />This action cannot be undone.
                       </p>
                       <div className="modal-actions">
-                        <button className="modal-btn secondary" onClick={() => setShowDeleteModal(false)} disabled={isDeleting}>İptal</button>
-                        <button className="modal-btn danger" onClick={deleteProject} disabled={isDeleting}>{isDeleting ? 'Siliniyor...' : 'Evet, Sil'}</button>
+                        <button className="modal-btn secondary" onClick={() => setShowDeleteModal(false)} disabled={isDeleting}>Cancel</button>
+                        <button className="modal-btn danger" onClick={deleteProject} disabled={isDeleting}>{isDeleting ? 'Deleting...' : 'Yes, Delete'}</button>
                       </div>
                     </div>
                   </div>

@@ -41,7 +41,11 @@ export async function POST(req: NextRequest) {
   try {
     const { data: project, error } = await supabase
       .from('projects')
-      .insert({ name: name.trim() })
+      .insert({ 
+        name: name.trim(),
+        user_id: '00000000-0000-0000-0000-000000000000',
+        description: '',
+      })
       .select()
       .single()
 

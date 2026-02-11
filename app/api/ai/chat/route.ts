@@ -95,6 +95,7 @@ export async function POST(req: NextRequest) {
 
     const encoder = new TextEncoder()
     const messageId = aiMessagePlaceholder.id
+    let isClosed = false // Prevent multiple close() calls
 
     // Create stream
     const stream = new ReadableStream({
@@ -107,7 +108,10 @@ export async function POST(req: NextRequest) {
 
         if (!aiResponse.body) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', error: 'No response body' })}\n\n`))
-          controller.close()
+          if (!isClosed) {
+            isClosed = true
+            controller.close()
+          }
           return
         }
 
@@ -144,8 +148,11 @@ export async function POST(req: NextRequest) {
                       .update({ content: fullContent })
                       .eq('id', messageId)
                     
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`))
-                    controller.close()
+                    if (!isClosed) {
+                      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`))
+                      isClosed = true
+                      controller.close()
+                    }
                     return
                   }
 
@@ -176,8 +183,11 @@ export async function POST(req: NextRequest) {
                     .from('messages')
                     .update({ content: fullContent })
                     .eq('id', messageId)
-                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`))
-                  controller.close()
+                  if (!isClosed) {
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`))
+                    isClosed = true
+                    controller.close()
+                  }
                   return
                 }
                 try {
@@ -199,8 +209,11 @@ export async function POST(req: NextRequest) {
             .update({ content: fullContent })
             .eq('id', messageId)
           
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`))
-          controller.close()
+          if (!isClosed) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`))
+            isClosed = true
+            controller.close()
+          }
           
         } catch (err) {
           console.error('Stream error:', err)
@@ -213,8 +226,11 @@ export async function POST(req: NextRequest) {
               .eq('id', messageId)
           }
           
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', error: 'Stream interrupted' })}\n\n`))
-          controller.close()
+          if (!isClosed) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', error: 'Stream interrupted' })}\n\n`))
+            isClosed = true
+            controller.close()
+          }
         }
       },
     })

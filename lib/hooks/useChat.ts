@@ -115,8 +115,9 @@ export function useChat({ projectId }: UseChatOptions) {
             if (line.startsWith('data: ')) {
               const data = line.slice(6)
               
+              let parsed: any
               try {
-                const parsed = JSON.parse(data)
+                parsed = JSON.parse(data)
                 
                 switch (parsed.type) {
                   case 'user_message':
@@ -152,10 +153,15 @@ export function useChat({ projectId }: UseChatOptions) {
                     }
                     break
                   case 'error':
-                    throw new Error(parsed.error)
+                    // Propagate error to outer catch block
+                    throw new Error(parsed.error || 'Stream error')
                 }
               } catch (e) {
-                // Ignore parse errors
+                // Re-throw errors from error case, ignore parse errors
+                if (parsed?.type === 'error') {
+                  throw e
+                }
+                // Otherwise ignore parse errors
               }
             }
           }

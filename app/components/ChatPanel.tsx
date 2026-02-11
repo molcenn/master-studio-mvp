@@ -15,6 +15,7 @@ function renderMarkdown(text: string): string {
       const fullCode = escapeHtml(code.trim())
       const lineCount = lines.length
       const id = 'code-' + Math.random().toString(36).substr(2, 9)
+      const codePreview = code.trim().substring(0, 30).replace(/'/g, "\\'")
       return `<div class="chat-code-card">
         <div class="chat-code-card-header">
           <span class="chat-code-lang">${lang || 'code'}</span>
@@ -23,6 +24,26 @@ function renderMarkdown(text: string): string {
         </div>
         <div class="chat-code-scroll">
           <pre class="chat-code-content" id="${id}"><code>${fullCode}</code></pre>
+        </div>
+        <div class="code-card-actions">
+          <button class="code-approve-btn" id="approve-${id}" onclick="
+            this.textContent='✓ Approved';
+            this.disabled=true;
+            this.style.opacity='0.5';
+            var actions = JSON.parse(localStorage.getItem('review-actions')||'[]');
+            actions.push({id:'${id}',action:'approved',code:'${codePreview}',timestamp:Date.now()});
+            localStorage.setItem('review-actions',JSON.stringify(actions));
+            window.dispatchEvent(new Event('review-action'));
+          ">✓ Approve</button>
+          <button class="code-fix-btn" id="fix-${id}" onclick="
+            this.textContent='✎ Fix Requested';
+            this.disabled=true;
+            this.style.opacity='0.5';
+            var actions = JSON.parse(localStorage.getItem('review-actions')||'[]');
+            actions.push({id:'${id}',action:'rejected',code:'${codePreview}',timestamp:Date.now()});
+            localStorage.setItem('review-actions',JSON.stringify(actions));
+            window.dispatchEvent(new Event('review-action'));
+          ">✎ Request Fix</button>
         </div>
       </div>`
     })
@@ -51,6 +72,15 @@ interface ChatPanelProps {
   onHtmlDetected?: () => void
 }
 
+interface ChatAgent {
+  id: string
+  name: string
+  model: string
+  description: string
+  createdAt: string
+  isDefault?: boolean
+}
+
 const MODEL_DISPLAY_NAMES: Record<string, string> = {
   kimi: 'Kimi K2.5',
   sonnet: 'Sonnet 4.5',
@@ -72,6 +102,63 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
   const [input, setInput] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Agent management
+  const [agents, setAgents] = useState<ChatAgent[]>([])
+  const [activeAgentId, setActiveAgentId] = useState('main')
+  const [showAgentForm, setShowAgentForm] = useState(false)
+  const [newAgentName, setNewAgentName] = useState('')
+  const [newAgentModel, setNewAgentModel] = useState('kimi')
+  const [newAgentDesc, setNewAgentDesc] = useState('')
+
+  // Load agents from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('master-studio-agents')
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        setAgents(parsed)
+      } catch (e) {
+        console.error('Failed to parse agents:', e)
+      }
+    }
+  }, [])
+
+  // Save agents to localStorage when changed
+  useEffect(() => {
+    localStorage.setItem('master-studio-agents', JSON.stringify(agents))
+  }, [agents])
+
+  const handleCreateAgent = () => {
+    if (!newAgentName.trim()) return
+    const newAgent: ChatAgent = {
+      id: 'agent-' + Date.now(),
+      name: newAgentName.trim(),
+      model: newAgentModel,
+      description: newAgentDesc.trim(),
+      createdAt: new Date().toISOString(),
+    }
+    setAgents([...agents, newAgent])
+    setNewAgentName('')
+    setNewAgentModel('kimi')
+    setNewAgentDesc('')
+    setShowAgentForm(false)
+  }
+
+  const handleDeleteAgent = (id: string) => {
+    setAgents(agents.filter(a => a.id !== id))
+    if (activeAgentId === id) {
+      setActiveAgentId('main')
+    }
+  }
+
+  const getAgentInitials = (name: string) => {
+    return name.slice(0, 1).toUpperCase()
+  }
+
+  const getModelDisplayName = (model: string) => {
+    return MODEL_DISPLAY_NAMES[model] || model
+  }
 
   // Auto-scroll to bottom when messages or streaming content changes
   useEffect(() => {
@@ -729,6 +816,37 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
           overflow-y: auto;
           overflow-x: hidden;
         }
+        .code-card-actions {
+          display: flex;
+          gap: 8px;
+          padding: 8px 12px;
+          border-top: 1px solid rgba(255,255,255,0.06);
+          background: rgba(0,0,0,0.2);
+        }
+        .code-approve-btn {
+          flex: 1;
+          padding: 5px 10px;
+          border: 1px solid rgba(74,222,128,0.3);
+          background: rgba(74,222,128,0.1);
+          color: #4ade80;
+          border-radius: 6px;
+          font-size: 11px;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+        .code-approve-btn:hover { background: rgba(74,222,128,0.2); }
+        .code-fix-btn {
+          flex: 1;
+          padding: 5px 10px;
+          border: 1px solid rgba(251,191,36,0.3);
+          background: rgba(251,191,36,0.1);
+          color: #fbbf24;
+          border-radius: 6px;
+          font-size: 11px;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+        .code-fix-btn:hover { background: rgba(251,191,36,0.2); }
         .chat-code-content {
           margin: 0;
           padding: 12px;

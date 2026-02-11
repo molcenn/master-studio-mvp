@@ -50,6 +50,7 @@ interface Milestone {
   dueDate: string
   tasks: { id: string; text: string; done: boolean }[]
   projectId: string
+  comments?: { text: string; author: string; timestamp: string }[]
 }
 
 interface Agent {
@@ -191,6 +192,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
   const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null)
   const [newMilestone, setNewMilestone] = useState({ title: '', description: '', dueDate: '' })
   const [newTaskText, setNewTaskText] = useState<{[key: string]: string}>({})
+  const [newCommentText, setNewCommentText] = useState<{[key: string]: string}>({})
 
   // Agents state
   const [agents, setAgents] = useState<Agent[]>([])
@@ -646,6 +648,42 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
       case 'in-progress': return 'var(--accent-amber)'
       case 'completed': return 'var(--accent-green)'
     }
+  }
+
+  // Notify chat about milestone updates via localStorage
+  const notifyMilestoneUpdate = (milestoneId: string, action: string, detail: string) => {
+    const updateData = {
+      milestoneId,
+      action,
+      detail,
+      timestamp: Date.now()
+    }
+    localStorage.setItem('milestone-updates', JSON.stringify(updateData))
+    window.dispatchEvent(new Event('milestone-update'))
+  }
+
+  // Add comment to milestone
+  const addComment = (milestoneId: string) => {
+    const text = newCommentText[milestoneId]?.trim()
+    if (!text) return
+    const comment = { text, author: 'User', timestamp: new Date().toISOString() }
+    setMilestones(milestones.map(m => {
+      if (m.id === milestoneId) {
+        const updated = { ...m, comments: [...(m.comments || []), comment] }
+        notifyMilestoneUpdate(milestoneId, 'comment', text)
+        return updated
+      }
+      return m
+    }))
+    setNewCommentText({ ...newCommentText, [milestoneId]: '' })
+  }
+
+  // Delete comment from milestone
+  const deleteComment = (milestoneId: string, commentIndex: number) => {
+    setMilestones(milestones.map(m => m.id === milestoneId ? {
+      ...m,
+      comments: m.comments?.filter((_, i) => i !== commentIndex)
+    } : m))
   }
 
   // Get active project display data

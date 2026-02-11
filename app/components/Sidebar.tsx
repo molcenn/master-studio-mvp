@@ -8,7 +8,7 @@ interface Project {
   created_at: string
 }
 
-type ViewType = 'dashboard' | 'workspace' | 'files' | 'agents' | 'reviews'
+type ViewType = 'dashboard' | 'workspace' | 'files' | 'reviews'
 
 interface SidebarProps {
   activeProject: string

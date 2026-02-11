@@ -72,6 +72,7 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         model: gatewayModel,
         messages: [
+          { role: 'system', content: 'Bu mesaj Master Studio Dashboard web arayüzünden geliyor. Dashboard\'da bir iframe preview paneli var — HTML/CSS/JS kodu ürettiğinde kullanıcı bunu Workspace > Preview tab\'ında görebilir. Browser, canvas veya node erişimi arama — sadece kod üret, ```html code block olarak yaz. Kullanıcı preview\'da görecek.' },
           ...contextMessages,
           { role: 'user', content: message },
         ],

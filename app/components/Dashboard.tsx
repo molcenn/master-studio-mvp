@@ -77,7 +77,12 @@ export default function Dashboard() {
           document.addEventListener('mouseup', onMouseUp)
         }}
       />
-      <ChatPanel projectId={activeProject} />
+      <ChatPanel 
+        projectId={activeProject} 
+        onHtmlDetected={() => {
+          setActiveView('workspace')
+        }}
+      />
     </div>
   )
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useChat } from '@/lib/hooks/useChat'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -34,6 +34,7 @@ function renderMarkdown(text: string): string {
 
 interface ChatPanelProps {
   projectId?: string
+  onHtmlDetected?: () => void
 }
 
 const MODEL_DISPLAY_NAMES: Record<string, string> = {
@@ -48,12 +49,21 @@ const MODEL_BADGE_COLORS: Record<string, { bg: string; text: string }> = {
   opus: { bg: 'rgba(168,85,247,0.15)', text: '#a855f7' },
 }
 
-export default function ChatPanel({ projectId = '00000000-0000-0000-0000-000000000001' }: ChatPanelProps) {
+export default function ChatPanel({ projectId = '00000000-0000-0000-0000-000000000001', onHtmlDetected }: ChatPanelProps) {
   const [activeTab, setActiveTab] = useState<'chat' | 'swarm'>('chat')
   const [selectedModel, setSelectedModel] = useState('kimi')
   const { messages, streamingContent, sendMessage, uploadFile, stopGeneration, isLoading } = useChat({ projectId, model: selectedModel })
   const [input, setInput] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Auto-detect HTML in agent messages and notify parent
+  useEffect(() => {
+    if (!onHtmlDetected || messages.length === 0) return
+    const lastMsg = messages[messages.length - 1]
+    if (lastMsg.role !== 'user' && /```html/i.test(lastMsg.content)) {
+      onHtmlDetected()
+    }
+  }, [messages, onHtmlDetected])
 
   const handleSend = async () => {
     if (!input.trim()) return

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 
 interface Message {
@@ -23,6 +23,7 @@ export function useChat({ projectId }: UseChatOptions) {
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   // Fetch messages
   useEffect(() => {
@@ -48,6 +49,9 @@ export function useChat({ projectId }: UseChatOptions) {
 
     setIsLoading(true)
     setError(null)
+    
+    // Create new abort controller for this request
+    abortControllerRef.current = new AbortController()
 
     try {
       // Optimistic update for user message
@@ -71,6 +75,7 @@ export function useChat({ projectId }: UseChatOptions) {
           message: content,
           context: messages.slice(-10),
         }),
+        signal: abortControllerRef.current.signal,
       })
 
       if (!res.ok) throw new Error('Failed to send message')
@@ -159,10 +164,20 @@ export function useChat({ projectId }: UseChatOptions) {
     }
   }, [projectId, session])
 
+  // Stop generation
+  const stopGeneration = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+      setIsLoading(false)
+    }
+  }, [])
+
   return {
     messages,
     sendMessage,
     uploadFile,
+    stopGeneration,
     isLoading,
     error,
   }

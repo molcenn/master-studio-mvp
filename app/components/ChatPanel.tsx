@@ -87,6 +87,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
 
   const handleSend = async () => {
     if (!input.trim()) return
+
     // Model command sync
     if (input.trim().startsWith('/model ')) {
       const model = input.trim().split(' ')[1]
@@ -94,6 +95,35 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
         setSelectedModel(model)
       }
     }
+
+    // Spawn command
+    if (input.trim().startsWith('/spawn ')) {
+      const task = input.trim().substring(7)
+      // Kullanıcı mesajını göster
+      const userMsg = input
+      setInput('')
+      await sendMessage(userMsg)
+
+      // Arka planda spawn API'ye gönder
+      try {
+        const res = await fetch('/api/ai/spawn', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            task,
+            model: selectedModel === 'kimi' ? 'moonshot/kimi-k2.5' :
+                   selectedModel === 'sonnet' ? 'anthropic/claude-sonnet-4-5-20250929' :
+                   selectedModel === 'opus' ? 'anthropic/claude-opus-4-6' : 'moonshot/kimi-k2.5'
+          })
+        })
+        const data = await res.json()
+        console.log('Spawn result:', data)
+      } catch (err) {
+        console.error('Spawn error:', err)
+      }
+      return
+    }
+
     await sendMessage(input)
     setInput('')
   }
@@ -219,7 +249,30 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
           <div className="chat-input-header">
             <span className="model-badge-simple">Betsy</span>
           </div>
-          <div className="chat-input-area">
+          <div className="chat-input-area" style={{ position: 'relative' }}>
+            {input.startsWith('/') && (
+              <div style={{
+                position: 'absolute',
+                bottom: '100%',
+                left: 0,
+                right: 0,
+                background: 'rgba(10,10,20,0.95)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: '8px',
+                padding: '8px',
+                marginBottom: '4px',
+                fontSize: '12px',
+                color: 'var(--text-secondary)',
+                zIndex: 100,
+              }}>
+                <div style={{ padding: '4px 8px', cursor: 'pointer' }} onClick={() => setInput('/model ')}>
+                  <span style={{ color: 'var(--accent-cyan)' }}>/model</span> kimi|sonnet|opus — Model değiştir
+                </div>
+                <div style={{ padding: '4px 8px', cursor: 'pointer' }} onClick={() => setInput('/spawn ')}>
+                  <span style={{ color: 'var(--accent-purple)' }}>/spawn</span> [görev] — Sub-agent başlat
+                </div>
+              </div>
+            )}
             <div className="chat-input-wrapper">
               <div className="chat-input-actions">
                 <input
@@ -247,7 +300,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
-                placeholder="Mesaj yaz..."
+                placeholder="Mesaj yazın... (/model, /spawn komutları)"
                 className="chat-input"
                 rows={2}
                 disabled={isLoading}

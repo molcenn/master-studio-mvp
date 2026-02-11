@@ -1,6 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+
+interface Project {
+  id: string
+  name: string
+  created_at: string
+}
 
 interface SidebarProps {
   activeProject: string
@@ -12,13 +18,7 @@ interface SidebarProps {
   }
 }
 
-const projects = [
-  { id: '00000000-0000-0000-0000-000000000001', name: 'AI Agent Dashboard', dot: '#00d4ff' },
-  { id: 'lansman-videosu', name: 'Lansman Videosu', dot: '#a855f7' },
-  { id: 'deneyim-merkezi', name: 'Deneyim Merkezi UI', dot: '#ec4899' },
-  { id: 'e-ticaret', name: 'E-ticaret Redesign', dot: '#22c55e' },
-  { id: 'sosyal-medya', name: 'Sosyal Medya Kit', dot: '#f59e0b' },
-]
+const PROJECT_COLORS = ['#00d4ff', '#a855f7', '#ec4899', '#22c55e', '#f59e0b', '#ef4444', '#3b82f6']
 
 const skills = [
   { 
@@ -58,6 +58,57 @@ const skills = [
 export default function Sidebar({ activeProject, setActiveProject, user }: SidebarProps) {
   const [skillsOpen, setSkillsOpen] = useState(true)
   const [activeSkill, setActiveSkill] = useState<string | null>(null)
+  const [projects, setProjects] = useState<Project[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [showNewProjectModal, setShowNewProjectModal] = useState(false)
+  const [newProjectName, setNewProjectName] = useState('')
+  const [isCreating, setIsCreating] = useState(false)
+
+  // Fetch projects from API
+  useEffect(() => {
+    fetchProjects()
+  }, [])
+
+  const fetchProjects = async () => {
+    try {
+      const res = await fetch('/api/projects')
+      if (!res.ok) throw new Error('Failed to fetch projects')
+      const data = await res.json()
+      setProjects(data.projects || [])
+    } catch (err) {
+      console.error('Error fetching projects:', err)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const createProject = async () => {
+    if (!newProjectName.trim()) return
+    
+    setIsCreating(true)
+    try {
+      const res = await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newProjectName.trim() }),
+      })
+      
+      if (!res.ok) throw new Error('Failed to create project')
+      
+      const data = await res.json()
+      setProjects([...projects, data.project])
+      setActiveProject(data.project.id)
+      setNewProjectName('')
+      setShowNewProjectModal(false)
+    } catch (err) {
+      console.error('Error creating project:', err)
+      alert('Proje oluşturulamadı')
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
+  const getProjectColor = (index: number) => PROJECT_COLORS[index % PROJECT_COLORS.length]
 
   return (
     <aside className="panel sidebar" style={{ borderRight: '1px solid var(--glass-border)' }}>
@@ -176,19 +227,27 @@ export default function Sidebar({ activeProject, setActiveProject, user }: Sideb
           <div style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: '8px', padding: '0 8px' }}>
             Projeler
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            {projects.map((project) => (
-              <div
-                key={project.id}
-                onClick={() => setActiveProject(project.id)}
-                className={`project-item ${activeProject === project.id ? 'active' : ''}`}
-              >
-                <div className="project-dot" style={{ background: project.dot }}></div>
-                <span className="project-item-name">{project.name}</span>
-              </div>
-            ))}
-          </div>
-          <button className="new-project-btn" style={{ marginTop: '10px' }}>
+          {isLoading ? (
+            <div style={{ padding: '8px', fontSize: '12px', color: 'var(--text-tertiary)' }}>Yükleniyor...</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              {projects.map((project, index) => (
+                <div
+                  key={project.id}
+                  onClick={() => setActiveProject(project.id)}
+                  className={`project-item ${activeProject === project.id ? 'active' : ''}`}
+                >
+                  <div className="project-dot" style={{ background: getProjectColor(index) }}></div>
+                  <span className="project-item-name">{project.name}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <button 
+            className="new-project-btn" 
+            style={{ marginTop: '10px' }}
+            onClick={() => setShowNewProjectModal(true)}
+          >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="12" y1="5" x2="12" y2="19"/>
               <line x1="5" y1="12" x2="19" y2="12"/>
@@ -196,6 +255,45 @@ export default function Sidebar({ activeProject, setActiveProject, user }: Sideb
             Yeni Proje
           </button>
         </div>
+
+        {/* New Project Modal */}
+        {showNewProjectModal && (
+          <div className="modal-overlay" onClick={() => setShowNewProjectModal(false)}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3>Yeni Proje</h3>
+                <button className="modal-close" onClick={() => setShowNewProjectModal(false)}>×</button>
+              </div>
+              <div className="modal-body">
+                <input
+                  type="text"
+                  value={newProjectName}
+                  onChange={(e) => setNewProjectName(e.target.value)}
+                  placeholder="Proje adı..."
+                  className="modal-input"
+                  autoFocus
+                  onKeyDown={(e) => e.key === 'Enter' && createProject()}
+                />
+              </div>
+              <div className="modal-footer">
+                <button 
+                  className="modal-btn secondary" 
+                  onClick={() => setShowNewProjectModal(false)}
+                  disabled={isCreating}
+                >
+                  İptal
+                </button>
+                <button 
+                  className="modal-btn primary" 
+                  onClick={createProject}
+                  disabled={!newProjectName.trim() || isCreating}
+                >
+                  {isCreating ? 'Oluşturuluyor...' : 'Oluştur'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Sidebar Footer */}
@@ -356,6 +454,56 @@ export default function Sidebar({ activeProject, setActiveProject, user }: Sideb
           transition: all 0.15s ease; width: 100%;
         }
         .new-project-btn:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+        .modal-overlay {
+          position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+          background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+          display: flex; align-items: center; justify-content: center;
+          z-index: 1000;
+        }
+        .modal-content {
+          background: var(--glass-bg); backdrop-filter: var(--glass-blur);
+          border: 1px solid var(--glass-border); border-radius: 12px;
+          width: 90%; max-width: 400px; padding: 20px;
+        }
+        .modal-header {
+          display: flex; align-items: center; justify-content: space-between;
+          margin-bottom: 16px;
+        }
+        .modal-header h3 {
+          font-size: 16px; font-weight: 600; margin: 0;
+        }
+        .modal-close {
+          background: none; border: none; color: var(--text-tertiary);
+          font-size: 24px; cursor: pointer; padding: 0; width: 28px; height: 28px;
+          display: flex; align-items: center; justify-content: center;
+          border-radius: 6px; transition: all 0.15s ease;
+        }
+        .modal-close:hover { background: rgba(255,255,255,0.05); color: var(--text-primary); }
+        .modal-input {
+          width: 100%; padding: 10px 14px; border-radius: 8px;
+          border: 1px solid var(--glass-border); background: rgba(0,0,0,0.25);
+          color: var(--text-primary); font-size: 14px; outline: none;
+        }
+        .modal-input:focus { border-color: rgba(0,212,255,0.3); }
+        .modal-footer {
+          display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px;
+        }
+        .modal-btn {
+          padding: 8px 16px; border-radius: 8px; font-size: 13px;
+          cursor: pointer; transition: all 0.15s ease; border: none;
+        }
+        .modal-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .modal-btn.secondary {
+          background: rgba(255,255,255,0.05); color: var(--text-secondary);
+        }
+        .modal-btn.secondary:hover:not(:disabled) {
+          background: rgba(255,255,255,0.1); color: var(--text-primary);
+        }
+        .modal-btn.primary {
+          background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+          color: white;
+        }
+        .modal-btn.primary:hover:not(:disabled) { opacity: 0.9; }
       `}</style>
     </aside>
   )

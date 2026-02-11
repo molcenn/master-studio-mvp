@@ -529,17 +529,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
 
         {activeView === 'workspace' && (
           <>
-            {!activeProject || activeProject === DEFAULT_PROJECT_ID ? (
-              <EmptyState 
-                icon={<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" strokeWidth="1.5">
-                  <rect x="3" y="3" width="18" height="18" rx="2"/>
-                  <line x1="12" y1="3" x2="12" y2="21"/>
-                </svg>}
-                title="Proje çalışma alanı"
-                description="Bir proje seçin"
-              />
-            ) : (
-              <div className="ide-container">
+            <div className="ide-container">
                 {/* IDE Tab Bar */}
                 <div className="ide-tabs">
                   <button className={`ide-tab ${ideTab === 'code' ? 'active' : ''}`} onClick={() => setIdeTab('code')}>
@@ -571,8 +561,8 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                           <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
                         </svg>
-                        <div style={{ fontSize: '14px', fontWeight: 500 }}>Agent henüz kod üretmedi</div>
-                        <div style={{ fontSize: '12px' }}>Chat'ten bir şey isteyin</div>
+                        <div style={{ fontSize: '14px', fontWeight: 500 }}>Henüz kod bloğu yok</div>
+                        <div style={{ fontSize: '12px' }}>Chat'te ``` ile kod yazın — otomatik yakalanır</div>
                       </div>
                     ) : (
                       <>
@@ -626,8 +616,8 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                             <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
                           </svg>
-                          <div style={{ fontSize: '14px', fontWeight: 500 }}>Önizleme için HTML kodu gerekli</div>
-                          <div style={{ fontSize: '12px' }}>Agent'tan HTML/CSS kodu isteyin</div>
+                          <div style={{ fontSize: '14px', fontWeight: 500 }}>Chat'ten HTML/CSS/JS kodu isteyin</div>
+                          <div style={{ fontSize: '12px' }}>Kod otomatik olarak burada görünecek</div>
                         </div>
                       ) : (
                         <>
@@ -743,7 +733,6 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                   </div>
                 )}
               </div>
-            )}
           </>
         )}
 

@@ -11,6 +11,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
   const { messages, streamingContent, sendMessage, uploadFile, stopGeneration, isLoading } = useChat({ projectId })
   const [input, setInput] = useState('')
   const [activeTab, setActiveTab] = useState<'chat' | 'swarm'>('chat')
+  const [selectedModel, setSelectedModel] = useState('kimi')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleSend = async () => {
@@ -197,6 +198,13 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
       ) : (
         /* Swarm Tab Content */
         <div className="swarm-content">
+          <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)}
+            style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.25)', color: 'var(--text-primary)', fontSize: '13px', marginBottom: '12px' }}>
+            <option value="kimi">Kimi K2.5 — Hızlı, günlük görevler</option>
+            <option value="sonnet">Claude Sonnet — UI/UX, coding</option>
+            <option value="opus">Claude Opus — Derin analiz, review</option>
+          </select>
+          <div className="swarm-section-title">Aktif Agent'lar</div>
           <div className="swarm-agent-card">
             <div className="swarm-agent-header">
               <div className="swarm-avatar cyan">K</div>
@@ -401,6 +409,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
           50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
         }
         .swarm-content { padding: 14px; display: flex; flex-direction: column; gap: 10px; flex: 1; overflow-y: auto; }
+        .swarm-section-title { font-size: 11px; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
         .swarm-agent-card {
           background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border);
           border-radius: 12px; padding: 12px; transition: all 0.15s ease;

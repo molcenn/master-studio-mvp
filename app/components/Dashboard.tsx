@@ -46,6 +46,7 @@ export default function Dashboard() {
         activeProject={activeProject}
         activeView={activeView}
         setActiveProject={setActiveProject}
+        setActiveView={setActiveView}
       />
       <ChatPanel projectId={activeProject} />
     </div>

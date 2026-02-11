@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 interface Project {
   id: string
@@ -17,12 +17,22 @@ interface Stats {
   fileCount: number
 }
 
+interface FileItem {
+  name: string
+  size: number
+  type: string
+  created_at: string
+  url: string
+  key: string
+}
+
 type ViewType = 'dashboard' | 'workspace' | 'files' | 'milestones' | 'agents' | 'reviews'
 
 interface MainWorkspaceProps {
   activeProject: string
   activeView: ViewType
   setActiveProject: (id: string) => void
+  setActiveView: (view: ViewType) => void
 }
 
 const PROJECT_COLORS = ['#00d4ff', '#a855f7', '#ec4899', '#22c55e', '#f59e0b', '#ef4444', '#3b82f6']
@@ -34,6 +44,26 @@ function getProjectColor(index: number) {
 
 function getInitials(name: string) {
   return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
+
+function formatFileType(type: string): string {
+  if (type.startsWith('image/')) return 'Image'
+  if (type.startsWith('video/')) return 'Video'
+  if (type.startsWith('audio/')) return 'Audio'
+  if (type.includes('pdf')) return 'PDF'
+  if (type.includes('json')) return 'JSON'
+  if (type.includes('javascript') || type.includes('typescript')) return 'Code'
+  if (type.includes('zip')) return 'Archive'
+  if (type.startsWith('text/')) return 'Text'
+  return 'File'
 }
 
 function getStatusFromIndex(index: number) {
@@ -72,11 +102,35 @@ function timeAgo(date: string) {
   return `${diffDays} gün önce`
 }
 
-export default function MainWorkspace({ activeProject, activeView, setActiveProject }: MainWorkspaceProps) {
+interface Message {
+  id: string
+  content: string
+  role: string
+  created_at: string
+  type?: string
+}
+
+const DEFAULT_PROJECT_ID = '00000000-0000-0000-0000-000000000001'
+
+export default function MainWorkspace({ activeProject, activeView, setActiveProject, setActiveView }: MainWorkspaceProps) {
   const [stats, setStats] = useState<Stats | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
   const [activeProjectData, setActiveProjectData] = useState<Project | null>(null)
   const [loading, setLoading] = useState(true)
+
+  // Workspace view states
+  const [recentMessages, setRecentMessages] = useState<Message[]>([])
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  
+  // Files view state
+  const [files, setFiles] = useState<FileItem[]>([])
+  const [filesLoading, setFilesLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Fetch stats and projects
   useEffect(() => {
@@ -89,6 +143,20 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
       fetchActiveProject()
     }
   }, [activeProject])
+
+  // Fetch messages when workspace view is active
+  useEffect(() => {
+    if (activeView === 'workspace') {
+      fetchRecentMessages()
+    }
+  }, [activeView, activeProject])
+
+  // Fetch files when viewing files tab
+  useEffect(() => {
+    if (activeView === 'files' && activeProject) {
+      fetchFiles()
+    }
+  }, [activeView, activeProject])
 
   const fetchData = async () => {
     try {
@@ -130,6 +198,108 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
       }
     } catch (err) {
       console.error('Error fetching active project:', err)
+    }
+  }
+
+  // Fetch recent messages for workspace view
+  const fetchRecentMessages = async () => {
+    if (!activeProject || activeProject === DEFAULT_PROJECT_ID) return
+    try {
+      const res = await fetch(`/api/chat?projectId=${activeProject}`)
+      if (res.ok) {
+        const data = await res.json()
+        setRecentMessages(data.messages?.slice(-5).reverse() || [])
+      }
+    } catch (err) {
+      console.error('Error fetching messages:', err)
+    }
+  }
+
+  // Update project name
+  const updateProjectName = async () => {
+    if (!editName.trim() || !activeProjectData) return
+    setIsSaving(true)
+    try {
+      const res = await fetch(`/api/projects/${activeProject}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: editName.trim() })
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setActiveProjectData(data.project)
+        setIsEditingName(false)
+      }
+    } catch (err) {
+      console.error('Error updating project name:', err)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  // Delete project
+  const deleteProject = async () => {
+    if (!activeProject) return
+    setIsDeleting(true)
+    try {
+      const res = await fetch(`/api/projects/${activeProject}`, {
+        method: 'DELETE'
+      })
+      if (res.ok) {
+        setActiveProject(DEFAULT_PROJECT_ID)
+        setShowDeleteModal(false)
+        setActiveView('dashboard')
+      }
+    } catch (err) {
+      console.error('Error deleting project:', err)
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const fetchFiles = async () => {
+    if (!activeProject) return
+    setFilesLoading(true)
+    try {
+      const res = await fetch(`/api/files?projectId=${activeProject}`)
+      if (res.ok) {
+        const data = await res.json()
+        setFiles(data.files || [])
+      }
+    } catch (err) {
+      console.error('Error fetching files:', err)
+    } finally {
+      setFilesLoading(false)
+    }
+  }
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !activeProject) return
+
+    setUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('projectId', activeProject)
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      })
+
+      if (res.ok) {
+        fetchFiles() // Refresh file list
+      } else {
+        console.error('Upload failed')
+      }
+    } catch (err) {
+      console.error('Error uploading file:', err)
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
     }
   }
 
@@ -320,14 +490,111 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
         )}
 
         {activeView === 'files' && (
-          <EmptyState 
-            icon={<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" strokeWidth="1.5">
-              <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
-              <polyline points="14 2 14 8 20 8"/>
-            </svg>}
-            title="Henüz dosya yüklenmedi"
-            description="Dosyalarınız burada görünecek"
-          />
+          <div className="files-container">
+            {/* Files Header */}
+            <div className="files-header">
+              <div className="files-count">
+                {files.length} dosya
+              </div>
+              <button 
+                className="upload-btn"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading || !activeProject}
+              >
+                {uploading ? (
+                  <>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="spin">
+                      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                    </svg>
+                    Yükleniyor...
+                  </>
+                ) : (
+                  <>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                      <polyline points="17 8 12 3 7 8"/>
+                      <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    Dosya Yükle
+                  </>
+                )}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                onChange={handleFileUpload}
+                style={{ display: 'none' }}
+                disabled={uploading}
+              />
+            </div>
+
+            {/* Files Content */}
+            {filesLoading ? (
+              <div className="files-loading">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="spin">
+                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                </svg>
+                Dosyalar yükleniyor...
+              </div>
+            ) : files.length === 0 ? (
+              <EmptyState 
+                icon={<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" strokeWidth="1.5">
+                  <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                </svg>}
+                title="Henüz dosya yüklenmedi"
+                description="Dosya yüklemek için yukarıdaki butonu kullanın"
+              />
+            ) : (
+              <div className="files-table-container">
+                <table className="files-table">
+                  <thead>
+                    <tr>
+                      <th>İsim</th>
+                      <th>Boyut</th>
+                      <th>Tür</th>
+                      <th>Tarih</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {files.map((file, index) => (
+                      <tr 
+                        key={file.key} 
+                        className="file-row"
+                        onClick={() => window.open(file.url, '_blank')}
+                        style={{ animationDelay: `${index * 30}ms` }}
+                      >
+                        <td className="file-name-cell">
+                          <div className="file-icon">
+                            {file.type.startsWith('image/') ? (
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" strokeWidth="2">
+                                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                                <circle cx="8.5" cy="8.5" r="1.5"/>
+                                <path d="M21 15l-5-5L5 21"/>
+                              </svg>
+                            ) : file.type.startsWith('video/') ? (
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-purple)" strokeWidth="2">
+                                <polygon points="5 3 19 12 5 21 5 3"/>
+                              </svg>
+                            ) : (
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2">
+                                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                              </svg>
+                            )}
+                          </div>
+                          <span className="file-name">{file.name}</span>
+                        </td>
+                        <td className="file-size">{formatFileSize(file.size)}</td>
+                        <td className="file-type">{formatFileType(file.type)}</td>
+                        <td className="file-date">{new Date(file.created_at).toLocaleDateString('tr-TR')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         )}
 
         {activeView === 'milestones' && (
@@ -343,17 +610,65 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
         )}
 
         {activeView === 'agents' && (
-          <EmptyState 
-            icon={<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-purple)" strokeWidth="1.5">
-              <circle cx="12" cy="12" r="3"/>
-              <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
-              <circle cx="4.93" cy="4.93" r="1.5"/>
-              <circle cx="19.07" cy="4.93" r="1.5"/>
-              <circle cx="19.07" cy="19.07" r="1.5"/>
-            </svg>}
-            title="Agent yönetimi"
-            description="Aktif agent'larınız burada görünecek"
-          />
+          <div className="agents-view">
+            <div className="section-header">
+              <span className="section-title">AI Agent'larım</span>
+              <button className="section-action">Yenile ↻</button>
+            </div>
+            <div className="agents-grid">
+              {/* Kimi K2.5 */}
+              <div className="agent-card">
+                <div className="agent-card-header">
+                  <div className="agent-avatar-large cyan">K</div>
+                  <div className="agent-info">
+                    <div className="agent-name">Kimi K2.5</div>
+                    <div className="agent-role">Ana Model</div>
+                  </div>
+                  <span className="agent-status-badge active">Aktif</span>
+                </div>
+                <div className="agent-description">Günlük görevler, hızlı yanıt, genel amaçlı üretim</div>
+              </div>
+
+              {/* Claude Opus */}
+              <div className="agent-card">
+                <div className="agent-card-header">
+                  <div className="agent-avatar-large purple">O</div>
+                  <div className="agent-info">
+                    <div className="agent-name">Claude Opus</div>
+                    <div className="agent-role">Derin Analiz</div>
+                  </div>
+                  <span className="agent-status-badge pending">Beklemede</span>
+                </div>
+                <div className="agent-description">Kod review, mimari kararlar, karmaşık analizler</div>
+              </div>
+
+              {/* Claude Sonnet */}
+              <div className="agent-card">
+                <div className="agent-card-header">
+                  <div className="agent-avatar-large pink">S</div>
+                  <div className="agent-info">
+                    <div className="agent-name">Claude Sonnet</div>
+                    <div className="agent-role">UI/UX Geliştirme</div>
+                  </div>
+                  <span className="agent-status-badge pending">Beklemede</span>
+                </div>
+                <div className="agent-description">Component yazma, UI geliştirme, tasarım işleri</div>
+              </div>
+
+              {/* DALL-E */}
+              <div className="agent-card">
+                <div className="agent-card-header">
+                  <div className="agent-avatar-large green">D</div>
+                  <div className="agent-info">
+                    <div className="agent-name">DALL-E</div>
+                    <div className="agent-role">Görsel Üretimi</div>
+                  </div>
+                  <span className="agent-status-badge pending">Beklemede</span>
+                </div>
+                <div className="agent-description">Image generation, görsel içerik üretimi</div>
+              </div>
+            </div>
+          </div>
         )}
 
         {activeView === 'reviews' && (
@@ -510,6 +825,38 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
         .empty-state-desc {
           font-size: 14px;
           color: var(--text-tertiary);
+        }
+        .agents-view { padding: 8px 0; }
+        .agents-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+        .agent-card {
+          background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border);
+          border-radius: 16px; padding: 20px;
+          transition: all 0.2s ease;
+        }
+        .agent-card:hover { border-color: var(--glass-border-hover); background: rgba(0,0,0,0.3); transform: translateY(-2px); }
+        .agent-card-header { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+        .agent-avatar-large {
+          width: 48px; height: 48px; border-radius: 12px;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 20px; font-weight: 700; flex-shrink: 0;
+        }
+        .agent-avatar-large.cyan { background: linear-gradient(135deg, var(--accent-cyan), #0ea5e9); }
+        .agent-avatar-large.purple { background: linear-gradient(135deg, var(--accent-purple), #7c3aed); }
+        .agent-avatar-large.pink { background: linear-gradient(135deg, var(--accent-pink), #f43f5e); }
+        .agent-avatar-large.green { background: linear-gradient(135deg, var(--accent-green), #16a34a); }
+        .agent-info { flex: 1; min-width: 0; }
+        .agent-name { font-size: 15px; font-weight: 600; }
+        .agent-role { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+        .agent-status-badge {
+          font-size: 9px; padding: 4px 10px; border-radius: 10px;
+          font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+          flex-shrink: 0;
+        }
+        .agent-status-badge.active { background: rgba(34,197,94,0.15); color: var(--accent-green); }
+        .agent-status-badge.pending { background: rgba(148,163,184,0.15); color: var(--text-tertiary); }
+        .agent-description { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+        @media (max-width: 768px) {
+          .agents-grid { grid-template-columns: 1fr; }
         }
       `}</style>
     </main>

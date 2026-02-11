@@ -7,9 +7,12 @@ import Sidebar from './Sidebar'
 import MainWorkspace from './MainWorkspace'
 import ChatPanel from './ChatPanel'
 
+type ViewType = 'dashboard' | 'workspace' | 'files' | 'milestones' | 'agents' | 'reviews'
+
 export default function Dashboard() {
   const { data: session, status } = useSession()
   const [activeProject, setActiveProject] = useState('00000000-0000-0000-0000-000000000001')
+  const [activeView, setActiveView] = useState<ViewType>('dashboard')
 
   if (status === 'loading') {
     return (
@@ -36,8 +39,14 @@ export default function Dashboard() {
         activeProject={activeProject} 
         setActiveProject={setActiveProject}
         user={session.user}
+        activeView={activeView}
+        setActiveView={setActiveView}
       />
-      <MainWorkspace activeProject={activeProject} />
+      <MainWorkspace 
+        activeProject={activeProject}
+        activeView={activeView}
+        setActiveProject={setActiveProject}
+      />
       <ChatPanel projectId={activeProject} />
     </div>
   )

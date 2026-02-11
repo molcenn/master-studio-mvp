@@ -17,8 +17,12 @@ interface Stats {
   fileCount: number
 }
 
+type ViewType = 'dashboard' | 'workspace' | 'files' | 'milestones' | 'agents' | 'reviews'
+
 interface MainWorkspaceProps {
   activeProject: string
+  activeView: ViewType
+  setActiveProject: (id: string) => void
 }
 
 const PROJECT_COLORS = ['#00d4ff', '#a855f7', '#ec4899', '#22c55e', '#f59e0b', '#ef4444', '#3b82f6']
@@ -68,7 +72,7 @@ function timeAgo(date: string) {
   return `${diffDays} gün önce`
 }
 
-export default function MainWorkspace({ activeProject }: MainWorkspaceProps) {
+export default function MainWorkspace({ activeProject, activeView, setActiveProject }: MainWorkspaceProps) {
   const [stats, setStats] = useState<Stats | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
   const [activeProjectData, setActiveProjectData] = useState<Project | null>(null)
@@ -132,13 +136,32 @@ export default function MainWorkspace({ activeProject }: MainWorkspaceProps) {
   // Get active project display data
   const displayProject = activeProjectData || projects.find(p => p.id === activeProject)
 
+  // View title mapping
+  const viewTitles: Record<ViewType, string> = {
+    dashboard: displayProject ? displayProject.name : 'Dashboard',
+    workspace: 'Workspace',
+    files: 'Files',
+    milestones: 'Milestones',
+    agents: 'Agents',
+    reviews: 'Reviews'
+  }
+
+  // Empty state component
+  const EmptyState = ({ icon, title, description }: { icon: React.ReactNode, title: string, description: string }) => (
+    <div className="empty-state">
+      <div className="empty-state-icon">{icon}</div>
+      <div className="empty-state-title">{title}</div>
+      <div className="empty-state-desc">{description}</div>
+    </div>
+  )
+
   return (
     <main className="panel main" style={{ position: 'relative', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <div className="main-header">
         <div className="main-header-left">
           <span className="panel-title">
-            {displayProject ? displayProject.name : 'Dashboard'}
+            {viewTitles[activeView]}
           </span>
           {displayProject && (
             <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
@@ -162,122 +185,186 @@ export default function MainWorkspace({ activeProject }: MainWorkspaceProps) {
         </div>
       </div>
 
-      {/* Dashboard Content */}
+      {/* Content Area */}
       <div className="today-view">
-        {loading ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px', color: 'var(--text-tertiary)' }}>
-            Yükleniyor...
-          </div>
-        ) : (
+        {activeView === 'dashboard' && (
           <>
-            {/* Welcome */}
-            <div className="welcome-section">
-              <div className="welcome-greeting">Günaydın, <span>Murat</span> ✦</div>
-              <div className="welcome-summary">
-                {stats?.projectCount || 0} aktif proje · {stats?.activeAgents || 0} agent çalışıyor · {stats?.pendingReviews || 0} review bekliyor
+            {loading ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px', color: 'var(--text-tertiary)' }}>
+                Yükleniyor...
               </div>
-            </div>
+            ) : (
+              <>
+                {/* Welcome */}
+                <div className="welcome-section">
+                  <div className="welcome-greeting">Günaydın, <span>Murat</span> ✦</div>
+                  <div className="welcome-summary">
+                    {stats?.projectCount || 0} aktif proje · {stats?.activeAgents || 0} agent çalışıyor · {stats?.pendingReviews || 0} review bekliyor
+                  </div>
+                </div>
 
-            {/* Stats */}
-            <div className="stats-row">
-              <div className="stat-card">
-                <div className="stat-value gradient">{stats?.projectCount || 0}</div>
-                <div className="stat-label">Aktif Proje</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-value" style={{ color: 'var(--accent-green)' }}>{stats?.activeAgents || 0}</div>
-                <div className="stat-label">Çalışan Agent</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-value" style={{ color: 'var(--accent-amber)' }}>{stats?.pendingReviews || 0}</div>
-                <div className="stat-label">Bekleyen Review</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-value" style={{ color: 'var(--accent-cyan)' }}>{stats?.todayMessageCount || 0}</div>
-                <div className="stat-label">Bugünkü Mesaj</div>
-              </div>
-            </div>
+                {/* Stats */}
+                <div className="stats-row">
+                  <div className="stat-card">
+                    <div className="stat-value gradient">{stats?.projectCount || 0}</div>
+                    <div className="stat-label">Aktif Proje</div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="stat-value" style={{ color: 'var(--accent-green)' }}>{stats?.activeAgents || 0}</div>
+                    <div className="stat-label">Çalışan Agent</div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="stat-value" style={{ color: 'var(--accent-amber)' }}>{stats?.pendingReviews || 0}</div>
+                    <div className="stat-label">Bekleyen Review</div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="stat-value" style={{ color: 'var(--accent-cyan)' }}>{stats?.todayMessageCount || 0}</div>
+                    <div className="stat-label">Bugünkü Mesaj</div>
+                  </div>
+                </div>
 
-            {/* Active Projects */}
-            <div className="section-header">
-              <span className="section-title">Aktif Projeler</span>
-              <button className="section-action">Tümünü Gör →</button>
-            </div>
-            <div className="project-cards">
-              {projects.slice(0, 3).map((project, index) => {
-                const status = getStatusFromIndex(index)
-                const progress = getProgressFromStatus(status)
-                const messageCount = project.messages?.[0]?.count || 0
-                return (
-                  <div 
-                    key={project.id} 
-                    className={`project-card ${activeProject === project.id ? 'active' : ''}`}
-                  >
-                    <div className="project-card-header">
-                      <div>
-                        <div className="project-card-name">{project.name}</div>
-                        <div className="project-card-client">{messageCount} mesaj</div>
-                      </div>
-                      <span className={`project-card-status ${getStatusClass(status)}`}>{status}</span>
-                    </div>
-                    <div className="project-card-progress">
-                      <div className="progress-bar-bg">
-                        <div className="progress-bar-fill" style={{ width: `${progress}%` }}></div>
-                      </div>
-                      <div className="progress-label">
-                        <span className="progress-text">Progress</span>
-                        <span className="progress-text">{progress}%</span>
-                      </div>
-                    </div>
-                    <div className="project-card-footer">
-                      <div className="agent-avatars">
-                        <div className="agent-avatar cyan" style={{ background: getProjectColor(index) }}>
-                          {getInitials(project.name)}
+                {/* Active Projects */}
+                <div className="section-header">
+                  <span className="section-title">Aktif Projeler</span>
+                  <button className="section-action">Tümünü Gör →</button>
+                </div>
+                <div className="project-cards">
+                  {projects.slice(0, 3).map((project, index) => {
+                    const status = getStatusFromIndex(index)
+                    const progress = getProgressFromStatus(status)
+                    const messageCount = project.messages?.[0]?.count || 0
+                    return (
+                      <div 
+                        key={project.id} 
+                        className={`project-card ${activeProject === project.id ? 'active' : ''}`}
+                        onClick={() => setActiveProject(project.id)}
+                      >
+                        <div className="project-card-header">
+                          <div>
+                            <div className="project-card-name">{project.name}</div>
+                            <div className="project-card-client">{messageCount} mesaj</div>
+                          </div>
+                          <span className={`project-card-status ${getStatusClass(status)}`}>{status}</span>
+                        </div>
+                        <div className="project-card-progress">
+                          <div className="progress-bar-bg">
+                            <div className="progress-bar-fill" style={{ width: `${progress}%` }}></div>
+                          </div>
+                          <div className="progress-label">
+                            <span className="progress-text">Progress</span>
+                            <span className="progress-text">{progress}%</span>
+                          </div>
+                        </div>
+                        <div className="project-card-footer">
+                          <div className="agent-avatars">
+                            <div className="agent-avatar cyan" style={{ background: getProjectColor(index) }}>
+                              {getInitials(project.name)}
+                            </div>
+                          </div>
+                          <span className="project-card-time">{timeAgo(project.created_at)}</span>
                         </div>
                       </div>
-                      <span className="project-card-time">{timeAgo(project.created_at)}</span>
+                    )
+                  })}
+                </div>
+
+                {/* Review Queue */}
+                <div className="section-header">
+                  <span className="section-title">Bekleyen Review'lar</span>
+                  <button className="section-action">Tümünü Gör →</button>
+                </div>
+                <div className="review-list">
+                  <div className="review-item">
+                    <div className="review-icon code">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="2">
+                        <polyline points="16 18 22 12 16 6"/>
+                        <polyline points="8 6 2 12 8 18"/>
+                      </svg>
                     </div>
+                    <div className="review-info">
+                      <div className="review-title">API endpoint refactoring</div>
+                      <div className="review-meta">coding-agent · Agent Dashboard · 10 dk önce</div>
+                    </div>
+                    <span className="review-priority priority-urgent">Acil</span>
                   </div>
-                )
-              })}
-            </div>
 
-            {/* Review Queue */}
-            <div className="section-header">
-              <span className="section-title">Bekleyen Review'lar</span>
-              <button className="section-action">Tümünü Gör →</button>
-            </div>
-            <div className="review-list">
-              <div className="review-item">
-                <div className="review-icon code">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="2">
-                    <polyline points="16 18 22 12 16 6"/>
-                    <polyline points="8 6 2 12 8 18"/>
-                  </svg>
+                  <div className="review-item">
+                    <div className="review-icon asset">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00d4ff" strokeWidth="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <path d="M21 15l-5-5L5 21"/>
+                      </svg>
+                    </div>
+                    <div className="review-info">
+                      <div className="review-title">Hero image generation v3</div>
+                      <div className="review-meta">dalle-agent · Lansman Videosu · 1 saat önce</div>
+                    </div>
+                    <span className="review-priority priority-normal">Normal</span>
+                  </div>
                 </div>
-                <div className="review-info">
-                  <div className="review-title">API endpoint refactoring</div>
-                  <div className="review-meta">coding-agent · Agent Dashboard · 10 dk önce</div>
-                </div>
-                <span className="review-priority priority-urgent">Acil</span>
-              </div>
-
-              <div className="review-item">
-                <div className="review-icon asset">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00d4ff" strokeWidth="2">
-                    <rect x="3" y="3" width="18" height="18" rx="2"/>
-                    <circle cx="8.5" cy="8.5" r="1.5"/>
-                    <path d="M21 15l-5-5L5 21"/>
-                  </svg>
-                </div>
-                <div className="review-info">
-                  <div className="review-title">Hero image generation v3</div>
-                  <div className="review-meta">dalle-agent · Lansman Videosu · 1 saat önce</div>
-                </div>
-                <span className="review-priority priority-normal">Normal</span>
-              </div>
-            </div>
+              </>
+            )}
           </>
+        )}
+
+        {activeView === 'workspace' && (
+          <EmptyState 
+            icon={<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" strokeWidth="1.5">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <line x1="12" y1="3" x2="12" y2="21"/>
+            </svg>}
+            title="Proje çalışma alanı"
+            description="Bir proje seçin"
+          />
+        )}
+
+        {activeView === 'files' && (
+          <EmptyState 
+            icon={<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" strokeWidth="1.5">
+              <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+              <polyline points="14 2 14 8 20 8"/>
+            </svg>}
+            title="Henüz dosya yüklenmedi"
+            description="Dosyalarınız burada görünecek"
+          />
+        )}
+
+        {activeView === 'milestones' && (
+          <EmptyState 
+            icon={<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-purple)" strokeWidth="1.5">
+              <path d="M12 20V10"/>
+              <path d="M18 20V4"/>
+              <path d="M6 20v-4"/>
+            </svg>}
+            title="Henüz milestone yok"
+            description="Proje milestone'ları burada görünecek"
+          />
+        )}
+
+        {activeView === 'agents' && (
+          <EmptyState 
+            icon={<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-purple)" strokeWidth="1.5">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
+              <circle cx="4.93" cy="4.93" r="1.5"/>
+              <circle cx="19.07" cy="4.93" r="1.5"/>
+              <circle cx="19.07" cy="19.07" r="1.5"/>
+            </svg>}
+            title="Agent yönetimi"
+            description="Aktif agent'larınız burada görünecek"
+          />
+        )}
+
+        {activeView === 'reviews' && (
+          <EmptyState 
+            icon={<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-green)" strokeWidth="1.5">
+              <path d="M9 11l3 3L22 4"/>
+              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+            </svg>}
+            title="Review bekleyen görev yok"
+            description="Tüm review'lar tamamlandı"
+          />
         )}
       </div>
 
@@ -395,6 +482,34 @@ export default function MainWorkspace({ activeProject }: MainWorkspaceProps) {
         @media (max-width: 640px) {
           .project-cards { grid-template-columns: 1fr; }
           .stats-row { grid-template-columns: repeat(2, 1fr); }
+        }
+        .empty-state {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          min-height: 400px;
+          text-align: center;
+          background: var(--glass-bg);
+          backdrop-filter: var(--glass-blur);
+          -webkit-backdrop-filter: var(--glass-blur);
+          border: 1px solid var(--glass-border);
+          border-radius: 16px;
+          padding: 48px;
+        }
+        .empty-state-icon {
+          margin-bottom: 20px;
+          opacity: 0.8;
+        }
+        .empty-state-title {
+          font-size: 18px;
+          font-weight: 600;
+          color: var(--text-primary);
+          margin-bottom: 8px;
+        }
+        .empty-state-desc {
+          font-size: 14px;
+          color: var(--text-tertiary);
         }
       `}</style>
     </main>

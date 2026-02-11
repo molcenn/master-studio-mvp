@@ -8,6 +8,8 @@ interface Project {
   created_at: string
 }
 
+type ViewType = 'dashboard' | 'workspace' | 'files' | 'milestones' | 'agents' | 'reviews'
+
 interface SidebarProps {
   activeProject: string
   setActiveProject: (id: string) => void
@@ -16,6 +18,8 @@ interface SidebarProps {
     email?: string | null
     image?: string | null
   }
+  activeView: ViewType
+  setActiveView: (view: ViewType) => void
 }
 
 const PROJECT_COLORS = ['#00d4ff', '#a855f7', '#ec4899', '#22c55e', '#f59e0b', '#ef4444', '#3b82f6']
@@ -55,7 +59,7 @@ const skills = [
   },
 ]
 
-export default function Sidebar({ activeProject, setActiveProject, user }: SidebarProps) {
+export default function Sidebar({ activeProject, setActiveProject, user, activeView, setActiveView }: SidebarProps) {
   const [skillsOpen, setSkillsOpen] = useState(true)
   const [activeSkill, setActiveSkill] = useState<string | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
@@ -129,7 +133,10 @@ export default function Sidebar({ activeProject, setActiveProject, user }: Sideb
       <div className="panel-content">
         {/* Navigation */}
         <div style={{ padding: '12px 14px' }}>
-          <div className="nav-item active">
+          <div 
+            className={`nav-item ${activeView === 'dashboard' ? 'active' : ''}`}
+            onClick={() => setActiveView('dashboard')}
+          >
             <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <rect x="3" y="3" width="7" height="7" rx="1.5"/>
               <rect x="14" y="3" width="7" height="7" rx="1.5"/>
@@ -138,21 +145,30 @@ export default function Sidebar({ activeProject, setActiveProject, user }: Sideb
             </svg>
             Dashboard
           </div>
-          <div className="nav-item">
+          <div 
+            className={`nav-item ${activeView === 'workspace' ? 'active' : ''}`}
+            onClick={() => setActiveView('workspace')}
+          >
             <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <rect x="3" y="3" width="18" height="18" rx="2"/>
               <line x1="12" y1="3" x2="12" y2="21"/>
             </svg>
             Workspace
           </div>
-          <div className="nav-item">
+          <div 
+            className={`nav-item ${activeView === 'files' ? 'active' : ''}`}
+            onClick={() => setActiveView('files')}
+          >
             <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
               <polyline points="14 2 14 8 20 8"/>
             </svg>
             Files
           </div>
-          <div className="nav-item">
+          <div 
+            className={`nav-item ${activeView === 'milestones' ? 'active' : ''}`}
+            onClick={() => setActiveView('milestones')}
+          >
             <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M12 20V10"/>
               <path d="M18 20V4"/>
@@ -160,7 +176,10 @@ export default function Sidebar({ activeProject, setActiveProject, user }: Sideb
             </svg>
             Milestones
           </div>
-          <div className="nav-item">
+          <div 
+            className={`nav-item ${activeView === 'agents' ? 'active' : ''}`}
+            onClick={() => setActiveView('agents')}
+          >
             <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <circle cx="12" cy="12" r="3"/>
               <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
@@ -171,7 +190,10 @@ export default function Sidebar({ activeProject, setActiveProject, user }: Sideb
             Agents
             <span className="nav-badge purple">4</span>
           </div>
-          <div className="nav-item">
+          <div 
+            className={`nav-item ${activeView === 'reviews' ? 'active' : ''}`}
+            onClick={() => setActiveView('reviews')}
+          >
             <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M9 11l3 3L22 4"/>
               <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>

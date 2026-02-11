@@ -8,7 +8,7 @@ interface ChatPanelProps {
 }
 
 export default function ChatPanel({ projectId = '00000000-0000-0000-0000-000000000001' }: ChatPanelProps) {
-  const { messages, sendMessage, uploadFile, stopGeneration, isLoading } = useChat({ projectId })
+  const { messages, streamingContent, sendMessage, uploadFile, stopGeneration, isLoading } = useChat({ projectId })
   const [input, setInput] = useState('')
   const [activeTab, setActiveTab] = useState<'chat' | 'swarm'>('chat')
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -112,7 +112,18 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
               ))
             )}
             
-            {isLoading && (
+            {streamingContent && (
+              <div className="message agent">
+                <div className="message-header">
+                  <span className="message-agent-name">Betsy</span>
+                  <span className="message-model">Kimi K2.5</span>
+                  <span className="message-time">şimdi</span>
+                </div>
+                <div>{streamingContent}</div>
+              </div>
+            )}
+            
+            {isLoading && !streamingContent && (
               <div className="thinking-indicator">
                 <div className="thinking-dots">
                   <div className="thinking-dot"></div>

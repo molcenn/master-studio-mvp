@@ -22,6 +22,7 @@ export function useChat({ projectId }: UseChatOptions) {
   const { data: session } = useSession()
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [streamingContent, setStreamingContent] = useState<string>('')
   const [error, setError] = useState<string | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
 
@@ -43,11 +44,12 @@ export function useChat({ projectId }: UseChatOptions) {
     fetchMessages()
   }, [projectId, session])
 
-  // Send message to AI
+  // Send message to AI with streaming
   const sendMessage = useCallback(async (content: string, type: 'text' | 'file' | 'audio' = 'text', fileInfo?: any) => {
     if (!session || !content.trim()) return
 
     setIsLoading(true)
+    setStreamingContent('')
     setError(null)
     
     // Create new abort controller for this request
@@ -66,7 +68,7 @@ export function useChat({ projectId }: UseChatOptions) {
       }
       setMessages((prev) => [...prev, tempUserMessage])
 
-      // Call AI endpoint
+      // Call AI endpoint with streaming
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -74,29 +76,98 @@ export function useChat({ projectId }: UseChatOptions) {
           projectId,
           message: content,
           context: messages.slice(-10),
+          stream: true,
         }),
         signal: abortControllerRef.current.signal,
       })
 
       if (!res.ok) throw new Error('Failed to send message')
 
-      const data = await res.json()
-      
-      // Replace temp message with actual and add AI response
-      setMessages((prev) => [
-        ...prev.filter(m => m.id !== tempUserMessage.id),
-        data.userMessage,
-        data.aiMessage,
-      ])
-      
-      return data
+      const reader = res.body?.getReader()
+      if (!reader) throw new Error('No response body')
+
+      const decoder = new TextDecoder()
+      let userMessageData: Message | null = null
+      let aiMessageId: string | null = null
+      let fullContent = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value)
+        const lines = chunk.split('\n')
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6)
+            
+            try {
+              const parsed = JSON.parse(data)
+              
+              switch (parsed.type) {
+                case 'user_message':
+                  userMessageData = parsed.message
+                  setMessages((prev) => [
+                    ...prev.filter(m => m.id !== tempUserMessage.id),
+                    parsed.message,
+                  ])
+                  break
+                case 'ai_id':
+                  aiMessageId = parsed.messageId
+                  break
+                case 'chunk':
+                  fullContent += parsed.content
+                  setStreamingContent(fullContent)
+                  break
+                case 'done':
+                  // Stream complete, add final message
+                  if (aiMessageId) {
+                    const aiMessage: Message = {
+                      id: aiMessageId,
+                      project_id: projectId,
+                      user_id: '00000000-0000-0000-0000-000000000099',
+                      role: 'assistant',
+                      content: fullContent,
+                      type: 'text',
+                      created_at: new Date().toISOString(),
+                    }
+                    setMessages((prev) => [...prev, aiMessage])
+                    setStreamingContent('')
+                  }
+                  break
+                case 'error':
+                  throw new Error(parsed.error)
+              }
+            } catch (e) {
+              // Ignore parse errors
+            }
+          }
+        }
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error')
-      // Remove optimistic message on error
-      setMessages((prev) => prev.filter(m => !m.id.startsWith('temp-')))
-      throw err
+      if (err instanceof Error && err.name === 'AbortError') {
+        // User cancelled, add partial message
+        if (streamingContent) {
+          const aiMessage: Message = {
+            id: 'stopped-' + Date.now(),
+            project_id: projectId,
+            user_id: '00000000-0000-0000-0000-000000000099',
+            role: 'assistant',
+            content: streamingContent,
+            type: 'text',
+            created_at: new Date().toISOString(),
+          }
+          setMessages((prev) => [...prev, aiMessage])
+          setStreamingContent('')
+        }
+      } else {
+        setError(err instanceof Error ? err.message : 'Unknown error')
+        setMessages((prev) => prev.filter(m => !m.id.startsWith('temp-')))
+      }
     } finally {
       setIsLoading(false)
+      setStreamingContent('')
     }
   }, [projectId, session, messages])
 
@@ -108,7 +179,6 @@ export function useChat({ projectId }: UseChatOptions) {
     setError(null)
 
     try {
-      // Upload via formData
       const formData = new FormData()
       formData.append('file', file)
       formData.append('projectId', projectId)
@@ -125,7 +195,6 @@ export function useChat({ projectId }: UseChatOptions) {
 
       const { fileUrl } = await res.json()
 
-      // Send message with file
       await sendMessage(`Dosya: ${file.name}`, 'file', { name: file.name, url: fileUrl, type: file.type, size: file.size })
 
       return fileUrl
@@ -136,33 +205,6 @@ export function useChat({ projectId }: UseChatOptions) {
       setIsLoading(false)
     }
   }, [projectId, session, sendMessage])
-
-  // SSE connection for real-time updates (from other users)
-  useEffect(() => {
-    if (!session) return
-
-    const eventSource = new EventSource(`/api/stream?projectId=${projectId}`)
-
-    eventSource.onmessage = (event) => {
-      const data = JSON.parse(event.data)
-      if (data.type === 'new_message') {
-        setMessages((prev) => {
-          // Avoid duplicates
-          if (prev.find(m => m.id === data.message.id)) return prev
-          return [...prev, data.message]
-        })
-      }
-    }
-
-    eventSource.onerror = () => {
-      console.error('SSE connection error')
-      eventSource.close()
-    }
-
-    return () => {
-      eventSource.close()
-    }
-  }, [projectId, session])
 
   // Stop generation
   const stopGeneration = useCallback(() => {
@@ -175,6 +217,7 @@ export function useChat({ projectId }: UseChatOptions) {
 
   return {
     messages,
+    streamingContent,
     sendMessage,
     uploadFile,
     stopGeneration,

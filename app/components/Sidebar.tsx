@@ -256,7 +256,10 @@ export default function Sidebar({ activeProject, setActiveProject, user, activeV
               {projects.map((project, index) => (
                 <div
                   key={project.id}
-                  onClick={() => setActiveProject(project.id)}
+                  onClick={() => {
+                    setActiveProject(project.id)
+                    setActiveView('workspace')
+                  }}
                   className={`project-item ${activeProject === project.id ? 'active' : ''}`}
                 >
                   <div className="project-dot" style={{ background: getProjectColor(index) }}></div>

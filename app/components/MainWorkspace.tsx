@@ -310,7 +310,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
   const viewTitles: Record<ViewType, string> = {
     dashboard: displayProject ? displayProject.name : 'Dashboard',
     workspace: 'Workspace',
-    files: 'Files',
+    files: displayProject ? `${displayProject.name} — Dosyalar` : 'Files',
     milestones: 'Milestones',
     agents: 'Agents',
     reviews: 'Reviews'
@@ -407,7 +407,10 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                       <div 
                         key={project.id} 
                         className={`project-card ${activeProject === project.id ? 'active' : ''}`}
-                        onClick={() => setActiveProject(project.id)}
+                        onClick={() => {
+                          setActiveProject(project.id)
+                          setActiveView('workspace')
+                        }}
                       >
                         <div className="project-card-header">
                           <div>

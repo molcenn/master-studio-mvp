@@ -16,9 +16,10 @@ interface Message {
 
 interface UseChatOptions {
   projectId: string
+  model?: string
 }
 
-export function useChat({ projectId }: UseChatOptions) {
+export function useChat({ projectId, model }: UseChatOptions) {
   const { data: session } = useSession()
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -79,6 +80,7 @@ export function useChat({ projectId }: UseChatOptions) {
           message: content,
           context: messages.slice(-10),
           stream: true,
+          model,
         }),
         signal: abortControllerRef.current.signal,
       })

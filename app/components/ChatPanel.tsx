@@ -7,11 +7,23 @@ interface ChatPanelProps {
   projectId?: string
 }
 
+const MODEL_DISPLAY_NAMES: Record<string, string> = {
+  kimi: 'Kimi K2.5',
+  sonnet: 'Claude Sonnet',
+  opus: 'Claude Opus',
+}
+
+const MODEL_BADGE_COLORS: Record<string, { bg: string; text: string }> = {
+  kimi: { bg: 'rgba(0,212,255,0.15)', text: '#00d4ff' },
+  sonnet: { bg: 'rgba(236,72,153,0.15)', text: '#ec4899' },
+  opus: { bg: 'rgba(168,85,247,0.15)', text: '#a855f7' },
+}
+
 export default function ChatPanel({ projectId = '00000000-0000-0000-0000-000000000001' }: ChatPanelProps) {
-  const { messages, streamingContent, sendMessage, uploadFile, stopGeneration, isLoading } = useChat({ projectId })
-  const [input, setInput] = useState('')
   const [activeTab, setActiveTab] = useState<'chat' | 'swarm'>('chat')
   const [selectedModel, setSelectedModel] = useState('kimi')
+  const { messages, streamingContent, sendMessage, uploadFile, stopGeneration, isLoading } = useChat({ projectId, model: selectedModel })
+  const [input, setInput] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleSend = async () => {
@@ -63,7 +75,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
               <div className="message system">
                 <div className="message-header">
                   <span className="message-agent-name">Betsy</span>
-                  <span className="message-model">Kimi K2.5</span>
+                  <span className="message-model">{MODEL_DISPLAY_NAMES[selectedModel]}</span>
                   <span className="message-time">şimdi</span>
                 </div>
                 Merhaba Murat! AI Agent Dashboard projesinde sana nasıl yardımcı olabilirim? ✦
@@ -74,7 +86,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
                   {msg.role === 'agent' && (
                     <div className="message-header">
                       <span className="message-agent-name">Betsy</span>
-                      <span className="message-model">Kimi K2.5</span>
+                      <span className="message-model">{MODEL_DISPLAY_NAMES[selectedModel]}</span>
                       <span className="message-time">
                         {new Date(msg.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
                       </span>

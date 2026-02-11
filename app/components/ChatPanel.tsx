@@ -7,7 +7,7 @@ interface ChatPanelProps {
   projectId?: string
 }
 
-export default function ChatPanel({ projectId = 'ai-agent-dashboard' }: ChatPanelProps) {
+export default function ChatPanel({ projectId = '00000000-0000-0000-0000-000000000001' }: ChatPanelProps) {
   const { messages, sendMessage, uploadFile, stopGeneration, isLoading } = useChat({ projectId })
   const [input, setInput] = useState('')
   const [activeTab, setActiveTab] = useState<'chat' | 'swarm'>('chat')

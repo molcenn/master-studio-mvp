@@ -9,10 +9,9 @@ function escapeHtml(text: string): string {
 
 function renderMarkdown(text: string): string {
   return text
-    // Code blocks: ```lang\ncode\n``` → collapsible code card
+    // Code blocks: ```lang\ncode\n``` → scrollable code card window
     .replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
       const lines = code.trim().split('\n')
-      const preview = lines.slice(0, 3).map((l: string) => escapeHtml(l)).join('\n')
       const fullCode = escapeHtml(code.trim())
       const lineCount = lines.length
       const id = 'code-' + Math.random().toString(36).substr(2, 9)
@@ -20,23 +19,11 @@ function renderMarkdown(text: string): string {
         <div class="chat-code-card-header">
           <span class="chat-code-lang">${lang || 'code'}</span>
           <span class="chat-code-lines">${lineCount} satır</span>
-          <button class="chat-code-copy" onclick="navigator.clipboard.writeText(document.getElementById('${id}').textContent)">Kopyala</button>
+          <button class="chat-code-copy" onclick="navigator.clipboard.writeText(document.getElementById('${id}').textContent);this.textContent='✓ Kopyalandı';setTimeout(()=>this.textContent='Kopyala',1500)">Kopyala</button>
         </div>
-        <pre class="chat-code-preview"><code>${preview}${lineCount > 3 ? '\n...' : ''}</code></pre>
-        <pre class="chat-code-full" id="${id}" style="display:none"><code>${fullCode}</code></pre>
-        ${lineCount > 3 ? `<button class="chat-code-toggle" onclick="
-          var full = document.getElementById('${id}');
-          var prev = this.previousElementSibling.previousElementSibling;
-          if (full.style.display === 'none') {
-            full.style.display = 'block';
-            prev.style.display = 'none';
-            this.textContent = 'Kodu Gizle ↑';
-          } else {
-            full.style.display = 'none';
-            prev.style.display = 'block';
-            this.textContent = 'Kodu Göster ↓';
-          }
-        ">Kodu Göster ↓</button>` : ''}
+        <div class="chat-code-scroll">
+          <pre class="chat-code-content" id="${id}"><code>${fullCode}</code></pre>
+        </div>
       </div>`
     })
     // Inline code: `code` → <code>
@@ -610,18 +597,19 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
         }
         .hidden { display: none; }
         .chat-code-card {
-          background: rgba(0,0,0,0.35);
+          background: rgba(10, 10, 20, 0.85);
           border: 1px solid rgba(255,255,255,0.1);
           border-radius: 10px;
-          margin: 8px 0;
+          margin: 10px 0;
           overflow: hidden;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
         }
         .chat-code-card-header {
           display: flex;
           align-items: center;
           gap: 8px;
           padding: 8px 12px;
-          background: rgba(0,0,0,0.3);
+          background: rgba(0,0,0,0.4);
           border-bottom: 1px solid rgba(255,255,255,0.06);
         }
         .chat-code-lang {
@@ -652,34 +640,20 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
           background: rgba(255,255,255,0.1);
           color: var(--text-primary);
         }
-        .chat-code-preview, .chat-code-full {
-          margin: 0;
-          padding: 10px 12px;
-          font-family: 'SF Mono', Monaco, monospace;
-          font-size: 11px;
-          line-height: 1.5;
-          color: rgba(255,255,255,0.6);
-          overflow-x: auto;
-        }
-        .chat-code-full {
-          color: #e0e0e0;
-          max-height: 400px;
+        .chat-code-scroll {
+          max-height: 200px;
           overflow-y: auto;
+          overflow-x: hidden;
         }
-        .chat-code-toggle {
-          display: block;
-          width: 100%;
-          padding: 6px;
-          background: rgba(0,212,255,0.05);
-          border: none;
-          border-top: 1px solid rgba(255,255,255,0.06);
-          color: var(--accent-cyan);
+        .chat-code-content {
+          margin: 0;
+          padding: 12px;
+          font-family: 'SF Mono', Monaco, Inconsolata, 'Roboto Mono', monospace;
           font-size: 11px;
-          cursor: pointer;
-          transition: background 0.15s ease;
-        }
-        .chat-code-toggle:hover {
-          background: rgba(0,212,255,0.1);
+          line-height: 1.6;
+          color: #e0e0e0;
+          white-space: pre-wrap;
+          word-break: break-word;
         }
         .chat-inline-code {
           background: rgba(255,255,255,0.08);

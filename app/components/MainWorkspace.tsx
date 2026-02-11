@@ -2475,6 +2475,161 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
             opacity: 1;
           }
         }
+
+        /* Reviews View Styles */
+        .reviews-container { padding: 8px 0; }
+        .reviews-header {
+          display: flex; align-items: center; justify-content: space-between;
+          margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
+        }
+        .reviews-title {
+          display: flex; flex-direction: column; gap: 4px;
+        }
+        .reviews-title span:first-child {
+          font-size: 18px; font-weight: 600; color: var(--text-primary);
+        }
+        .reviews-subtitle {
+          font-size: 13px; color: var(--text-secondary);
+        }
+        .reviews-loading { font-size: 18px; font-weight: 600; color: var(--text-secondary); }
+        .reviews-filter {
+          display: flex; gap: 8px; flex-wrap: wrap;
+        }
+        .filter-btn {
+          padding: 8px 16px; border-radius: 8px;
+          font-size: 13px; font-weight: 500; cursor: pointer;
+          background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border);
+          color: var(--text-secondary); transition: all 0.15s ease;
+        }
+        .filter-btn:hover { background: rgba(255,255,255,0.05); color: var(--text-primary); }
+        .filter-btn.active {
+          background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+          color: white; border-color: transparent;
+        }
+        .reviews-loading-state {
+          display: flex; align-items: center; justify-content: center;
+          gap: 12px; height: 200px; color: var(--text-secondary); font-size: 14px;
+        }
+        .reviews-list {
+          display: flex; flex-direction: column; gap: 16px;
+        }
+        .review-card {
+          background: var(--glass-bg);
+          backdrop-filter: var(--glass-blur);
+          -webkit-backdrop-filter: var(--glass-blur);
+          border: 1px solid var(--glass-border);
+          border-radius: 16px; padding: 20px;
+          transition: all 0.2s ease;
+        }
+        .review-card:hover { border-color: var(--glass-border-hover); }
+        .review-card.approved { border-color: rgba(34,197,94,0.3); }
+        .review-card.rejected { border-color: rgba(239,68,68,0.3); }
+        .review-card-header { margin-bottom: 16px; }
+        .review-card-titles { display: flex; flex-direction: column; gap: 8px; }
+        .review-card-title-row {
+          display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        }
+        .review-card-title {
+          font-size: 16px; font-weight: 600; margin: 0; color: var(--text-primary);
+        }
+        .type-badge {
+          font-size: 10px; padding: 3px 8px; border-radius: 6px;
+          font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .type-badge-code { background: rgba(168,85,247,0.15); color: #a855f7; }
+        .type-badge-feature { background: rgba(0,212,255,0.15); color: #00d4ff; }
+        .type-badge-design { background: rgba(236,72,153,0.15); color: #ec4899; }
+        .type-badge-decision { background: rgba(245,158,11,0.15); color: #f59e0b; }
+        .status-badge {
+          font-size: 10px; padding: 3px 8px; border-radius: 6px;
+          font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .status-badge-pending { background: rgba(245,158,11,0.15); color: #f59e0b; }
+        .status-badge-approved { background: rgba(34,197,94,0.15); color: #22c55e; }
+        .status-badge-rejected { background: rgba(239,68,68,0.15); color: #ef4444; }
+        .review-card-description {
+          font-size: 14px; color: var(--text-secondary); margin: 0;
+        }
+        .review-card-meta {
+          display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+          font-size: 12px; color: var(--text-tertiary);
+        }
+        .meta-agent, .meta-project {
+          display: flex; align-items: center; gap: 6px;
+        }
+        .meta-time {
+          font-size: 11px; color: var(--text-tertiary);
+        }
+        .review-diff {
+          background: rgba(0,0,0,0.4);
+          border: 1px solid var(--glass-border);
+          border-radius: 10px; margin-bottom: 16px; overflow: hidden;
+        }
+        .diff-header {
+          display: flex; align-items: center; gap: 8px;
+          padding: 10px 14px; background: rgba(0,0,0,0.3);
+          border-bottom: 1px solid var(--glass-border);
+          font-size: 12px; font-weight: 600; color: var(--text-secondary);
+        }
+        .diff-content {
+          padding: 12px 14px; font-family: 'SF Mono', Monaco, Inconsolata, 'Roboto Mono', monospace;
+          font-size: 12px; line-height: 1.6; overflow-x: auto;
+        }
+        .diff-line {
+          display: flex; gap: 8px; padding: 2px 0;
+          white-space: pre-wrap; word-break: break-all;
+        }
+        .diff-line-marker {
+          width: 16px; flex-shrink: 0; text-align: center;
+          color: var(--text-tertiary); user-select: none;
+        }
+        .diff-line-content { flex: 1; }
+        .diff-line-removed {
+          color: #f87171;
+          background: rgba(248,113,113,0.1);
+          border-radius: 3px; padding: 1px 4px;
+        }
+        .diff-line-added {
+          color: #4ade80;
+          background: rgba(74,222,128,0.1);
+          border-radius: 3px; padding: 1px 4px;
+        }
+        .diff-line-neutral {
+          color: var(--text-secondary);
+        }
+        .review-card-actions {
+          display: flex; gap: 12px;
+        }
+        .review-btn {
+          display: flex; align-items: center; gap: 8px;
+          padding: 10px 20px; border-radius: 8px;
+          font-size: 13px; font-weight: 600; cursor: pointer;
+          transition: all 0.15s ease; border: none;
+        }
+        .review-btn.approve {
+          background: linear-gradient(135deg, #22c55e, #16a34a);
+          color: white;
+        }
+        .review-btn.approve:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(34,197,94,0.3);
+        }
+        .review-btn.reject {
+          background: rgba(245,158,11,0.15);
+          color: #f59e0b;
+          border: 1px solid rgba(245,158,11,0.3);
+        }
+        .review-btn.reject:hover {
+          background: rgba(245,158,11,0.25);
+          border-color: rgba(245,158,11,0.5);
+        }
+        @media (max-width: 640px) {
+          .reviews-header { flex-direction: column; align-items: flex-start; }
+          .reviews-filter { width: 100%; }
+          .filter-btn { flex: 1; }
+          .review-card-actions { flex-direction: column; }
+          .review-btn { width: 100%; justify-content: center; }
+        }
       `}</style>
     </main>
   )

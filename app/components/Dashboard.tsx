@@ -29,9 +29,10 @@ export default function Dashboard() {
 
   return (
     <div 
-      className="grid h-screen"
+      className="h-screen"
       style={{ 
-        gridTemplateColumns: `260px 1fr ${chatWidth}px`,
+        display: 'grid',
+        gridTemplateColumns: `260px 1fr 4px ${chatWidth}px`,
         position: 'relative',
         zIndex: 1 
       }}
@@ -50,13 +51,21 @@ export default function Dashboard() {
         setActiveView={setActiveView}
       />
       <div 
-        className="resize-handle"
+        style={{
+          cursor: 'col-resize',
+          background: 'transparent',
+          transition: 'background 0.15s ease',
+          zIndex: 10,
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--accent-cyan)')}
+        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
         onMouseDown={(e) => {
           e.preventDefault()
+          e.currentTarget.style.background = 'var(--accent-cyan)'
           const startX = e.clientX
           const startWidth = chatWidth
-          const onMouseMove = (e: MouseEvent) => {
-            const diff = startX - e.clientX
+          const onMouseMove = (ev: MouseEvent) => {
+            const diff = startX - ev.clientX
             const newWidth = Math.min(700, Math.max(300, startWidth + diff))
             setChatWidth(newWidth)
           }

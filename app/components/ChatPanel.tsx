@@ -57,6 +57,13 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
 
   const handleSend = async () => {
     if (!input.trim()) return
+    // Model command sync
+    if (input.trim().startsWith('/model ')) {
+      const model = input.trim().split(' ')[1]
+      if (['kimi', 'sonnet', 'opus'].includes(model)) {
+        setSelectedModel(model)
+      }
+    }
     await sendMessage(input)
     setInput('')
   }
@@ -179,15 +186,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
 
           {/* Chat Input */}
           <div className="chat-input-header">
-            <span 
-              className="model-badge"
-              style={{ 
-                backgroundColor: MODEL_BADGE_COLORS[selectedModel].bg,
-                color: MODEL_BADGE_COLORS[selectedModel].text 
-              }}
-            >
-              {MODEL_DISPLAY_NAMES[selectedModel]}
-            </span>
+            <span className="model-badge-simple">Betsy</span>
           </div>
           <div className="chat-input-area">
             <div className="chat-input-wrapper">
@@ -250,7 +249,12 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
       ) : (
         /* Swarm Tab Content */
         <div className="swarm-content">
-          <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)}
+          <select value={selectedModel} onChange={(e) => {
+              const newModel = e.target.value
+              setSelectedModel(newModel)
+              // Otomatik model değiştirme komutu gönder
+              sendMessage('/model ' + newModel)
+            }}
             style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.25)', color: 'var(--text-primary)', fontSize: '13px', marginBottom: '12px' }}>
             <option value="kimi">Kimi K2.5 — Hızlı, günlük görevler</option>
             <option value="sonnet">Claude Sonnet — UI/UX, coding</option>
@@ -415,6 +419,15 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
           padding: 3px 8px;
           border-radius: 10px;
           border: 1px solid currentColor;
+          opacity: 0.8;
+        }
+        .model-badge-simple {
+          font-size: 10px;
+          font-weight: 500;
+          padding: 3px 8px;
+          border-radius: 10px;
+          border: 1px solid var(--accent-cyan);
+          color: var(--accent-cyan);
           opacity: 0.8;
         }
         .chat-input-area {

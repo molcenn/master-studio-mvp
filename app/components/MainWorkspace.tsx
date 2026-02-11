@@ -219,9 +219,10 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
 
   // Fetch recent messages for workspace view
   const fetchRecentMessages = async () => {
-    if (!activeProject || activeProject === DEFAULT_PROJECT_ID) return
+    // Her zaman aktif projeden mesaj çek - default project ID bile olsa
+    const projectId = activeProject || DEFAULT_PROJECT_ID
     try {
-      const res = await fetch(`/api/chat?projectId=${activeProject}`)
+      const res = await fetch(`/api/chat?projectId=${projectId}`)
       if (res.ok) {
         const data = await res.json()
         setRecentMessages(data.messages?.slice(-5).reverse() || [])
@@ -274,19 +275,26 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
   }
 
   const fetchCodeBlocks = async () => {
-    if (!activeProject) return
+    // Her zaman fetch yap - activeProject yoksa default ID kullan
+    const projectId = activeProject || DEFAULT_PROJECT_ID
     try {
-      const res = await fetch(`/api/chat?projectId=${activeProject}`)
+      const res = await fetch(`/api/chat?projectId=${projectId}`)
       if (!res.ok) return
       const data = await res.json()
-      const msgs = (data.messages || []).filter((m: Message) => m.role === 'assistant' || m.role === 'agent')
+      // Tüm mesajları kontrol et (user + assistant + agent) - sadece assistant değil
+      const msgs = (data.messages || [])
       const blocks: {lang: string, code: string}[] = []
-      const regex = /```(\w*)\n([\s\S]*?)```/g
-      // Check last 5 agent messages
-      for (const msg of [...msgs].reverse().slice(0, 5)) {
+      const regex = /```(\w*)\n?([\s\S]*?)```/g
+      // Son 10 mesajı kontrol et - daha fazla kod bloğu bulmak için
+      for (const msg of [...msgs].reverse().slice(0, 10)) {
         let match
         while ((match = regex.exec(msg.content)) !== null) {
-          blocks.push({ lang: match[1].trim() || 'text', code: match[2].trim() })
+          const lang = match[1].trim().toLowerCase()
+          const code = match[2].trim()
+          // HTML, CSS, JS ve diğer yaygın dilleri destekle
+          if (lang && code) {
+            blocks.push({ lang, code })
+          }
         }
         regex.lastIndex = 0
       }

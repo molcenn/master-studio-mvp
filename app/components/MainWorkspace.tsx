@@ -679,7 +679,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
           </span>
           {displayProject && (
             <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
-              {new Date(displayProject.created_at).toLocaleDateString('tr-TR')}
+              {new Date(displayProject.created_at).toLocaleDateString('en-US')}
             </span>
           )}
         </div>
@@ -966,7 +966,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                       <div className="project-meta">
                         <span className="meta-item">
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                          {activeProjectData?.created_at ? new Date(activeProjectData.created_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' }) : '-'}
+                          {activeProjectData?.created_at ? new Date(activeProjectData.created_at).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : '-'}
                         </span>
                         <span className="meta-item">
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
@@ -1039,7 +1039,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
             {/* Files Header */}
             <div className="files-header">
               <div className="files-count">
-                {files.length} dosya
+                {files.length} files
               </div>
               <button 
                 className="upload-btn"
@@ -1051,7 +1051,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="spin">
                       <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
                     </svg>
-                    Yükleniyor...
+                    Uploading...
                   </>
                 ) : (
                   <>
@@ -1060,7 +1060,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                       <polyline points="17 8 12 3 7 8"/>
                       <line x1="12" y1="3" x2="12" y2="15"/>
                     </svg>
-                    Dosya Yükle
+                    Upload File
                   </>
                 )}
               </button>
@@ -1079,7 +1079,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="spin">
                   <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
                 </svg>
-                Dosyalar yükleniyor...
+                Loading files...
               </div>
             ) : files.length === 0 ? (
               <EmptyState 
@@ -1087,18 +1087,18 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                   <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
                   <polyline points="14 2 14 8 20 8"/>
                 </svg>}
-                title="Henüz dosya yüklenmedi"
-                description="Dosya yüklemek için yukarıdaki butonu kullanın"
+                title="No files uploaded yet"
+                description="Use the button above to upload files"
               />
             ) : (
               <div className="files-table-container">
                 <table className="files-table">
                   <thead>
                     <tr>
-                      <th>İsim</th>
-                      <th>Boyut</th>
-                      <th>Tür</th>
-                      <th>Tarih</th>
+                      <th>Name</th>
+                      <th>Size</th>
+                      <th>Type</th>
+                      <th>Date</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1132,7 +1132,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                         </td>
                         <td className="file-size">{formatFileSize(file.size)}</td>
                         <td className="file-type">{formatFileType(file.type)}</td>
-                        <td className="file-date">{new Date(file.created_at).toLocaleDateString('tr-TR')}</td>
+                        <td className="file-date">{new Date(file.created_at).toLocaleDateString('en-US')}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1278,12 +1278,12 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
             <div className="reviews-header">
               <div className="reviews-title">
                 {reviewsLoading ? (
-                  <span className="reviews-loading">Yükleniyor...</span>
+                  <span className="reviews-loading">Loading...</span>
                 ) : (
                   <>
-                    <span>{reviews.filter(r => r.status === 'pending').length} review bekliyor</span>
+                    <span>{reviews.filter(r => r.status === 'pending').length} pending reviews</span>
                     <span className="reviews-subtitle">
-                      {reviews.filter(r => r.status === 'approved').length} onaylandı · {reviews.filter(r => r.status === 'rejected').length} düzeltilecek
+                      {reviews.filter(r => r.status === 'approved').length} approved · {reviews.filter(r => r.status === 'rejected').length} needs fix
                     </span>
                   </>
                 )}
@@ -1296,10 +1296,10 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                     className={`filter-btn ${reviewFilter === filter ? 'active' : ''}`}
                     onClick={() => setReviewFilter(filter)}
                   >
-                    {filter === 'all' && 'Tümü'}
-                    {filter === 'pending' && 'Bekliyor'}
-                    {filter === 'approved' && 'Onaylanan'}
-                    {filter === 'rejected' && 'Düzeltilen'}
+                    {filter === 'all' && 'All'}
+                    {filter === 'pending' && 'Pending'}
+                    {filter === 'approved' && 'Approved'}
+                    {filter === 'rejected' && 'Needs Fix'}
                   </button>
                 ))}
               </div>
@@ -1311,7 +1311,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="spin">
                   <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
                 </svg>
-                Review'lar yükleniyor...
+                Loading reviews...
               </div>
             ) : reviews.length === 0 ? (
               <EmptyState 
@@ -1319,8 +1319,8 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                   <path d="M9 11l3 3L22 4"/>
                   <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
                 </svg>}
-                title={reviewFilter === 'all' ? "Review bekleyen görev yok" : "Bu filtreye uygun review yok"}
-                description={reviewFilter === 'all' ? "Tüm review'lar tamamlandı" : "Farklı bir filtre deneyin"}
+                title={reviewFilter === 'all' ? "No pending reviews" : "No reviews match this filter"}
+                description={reviewFilter === 'all' ? "All reviews completed" : "Try a different filter"}
               />
             ) : (
               <div className="reviews-list">
@@ -1364,7 +1364,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                               <polyline points="16 18 22 12 16 6"/>
                               <polyline points="8 6 2 12 8 18"/>
                             </svg>
-                            Kod Değişiklikleri
+                            Code Changes
                           </div>
                           <div className="diff-content">
                             {parseDiff(review.diff).map((line) => (
@@ -2765,288 +2765,6 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
           .review-btn { width: 100%; justify-content: center; }
         }
 
-        /* Swarm Panel Styles */
-        .swarm-panel {
-          background: rgba(0,0,0,0.2);
-          border: 1px solid var(--glass-border);
-          border-radius: 16px;
-          padding: 20px;
-          margin-bottom: 24px;
-        }
-        .swarm-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: 16px;
-        }
-        .swarm-title {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          font-size: 15px;
-          font-weight: 600;
-          color: var(--text-primary);
-        }
-        .swarm-title svg {
-          color: var(--accent-cyan);
-        }
-        .swarm-badge {
-          background: var(--accent-cyan);
-          color: #000;
-          font-size: 11px;
-          padding: 2px 8px;
-          border-radius: 10px;
-          font-weight: 700;
-        }
-        .swarm-subtitle {
-          font-size: 12px;
-          color: var(--text-tertiary);
-        }
-        .swarm-empty {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 10px;
-          padding: 32px;
-          color: var(--text-tertiary);
-          font-size: 13px;
-        }
-        .swarm-list {
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-        }
-        .swarm-task {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 12px 14px;
-          background: rgba(255,255,255,0.03);
-          border: 1px solid var(--glass-border);
-          border-radius: 10px;
-          transition: all 0.15s ease;
-        }
-        .swarm-task:hover {
-          background: rgba(255,255,255,0.05);
-          border-color: var(--glass-border-hover);
-        }
-        .swarm-task.running {
-          border-color: var(--accent-cyan);
-          background: rgba(0,212,255,0.05);
-        }
-        .swarm-task.completed {
-          border-color: rgba(34,197,94,0.3);
-        }
-        .swarm-task.error {
-          border-color: rgba(239,68,68,0.3);
-        }
-        .swarm-task-icon {
-          width: 32px;
-          height: 32px;
-          border-radius: 8px;
-          background: rgba(0,0,0,0.3);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-        }
-        .swarm-task-info {
-          flex: 1;
-          min-width: 0;
-        }
-        .swarm-task-name {
-          font-size: 13px;
-          font-weight: 500;
-          color: var(--text-primary);
-          margin-bottom: 4px;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-        .swarm-task-meta {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          font-size: 11px;
-        }
-        .swarm-task-model {
-          color: var(--accent-purple);
-          font-weight: 500;
-        }
-        .swarm-task-status {
-          padding: 2px 8px;
-          border-radius: 6px;
-          font-weight: 600;
-          text-transform: uppercase;
-          font-size: 9px;
-        }
-        .swarm-task-status.running {
-          background: rgba(0,212,255,0.15);
-          color: var(--accent-cyan);
-        }
-        .swarm-task-status.completed {
-          background: rgba(34,197,94,0.15);
-          color: var(--accent-green);
-        }
-        .swarm-task-status.error {
-          background: rgba(239,68,68,0.15);
-          color: var(--accent-red);
-        }
-        .swarm-task-time {
-          color: var(--text-tertiary);
-        }
-        .swarm-more {
-          text-align: center;
-          font-size: 12px;
-          color: var(--text-tertiary);
-          padding: 8px;
-        }
-
-        /* Agent Task Button */
-        .agent-task-btn {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          width: 100%;
-          padding: 10px;
-          margin-top: 12px;
-          background: rgba(0,212,255,0.1);
-          border: 1px solid var(--glass-border);
-          border-radius: 8px;
-          color: var(--accent-cyan);
-          font-size: 13px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s ease;
-        }
-        .agent-task-btn:hover {
-          background: rgba(0,212,255,0.2);
-          border-color: var(--accent-cyan);
-        }
-
-        /* Task Modal Styles */
-        .task-modal {
-          background: var(--glass-bg);
-          backdrop-filter: var(--glass-blur);
-          -webkit-backdrop-filter: var(--glass-blur);
-          border: 1px solid var(--glass-border);
-          border-radius: 16px;
-          max-width: 500px;
-          width: 90%;
-          animation: slideUp 0.2s ease;
-        }
-        .task-modal-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 20px 20px 0;
-        }
-        .task-modal-title {
-          font-size: 16px;
-          font-weight: 600;
-          margin: 0;
-          color: var(--text-primary);
-        }
-        .task-modal-agent {
-          color: var(--accent-cyan);
-        }
-        .task-modal-close {
-          background: none;
-          border: none;
-          color: var(--text-tertiary);
-          font-size: 18px;
-          cursor: pointer;
-          padding: 4px;
-          transition: color 0.2s ease;
-        }
-        .task-modal-close:hover {
-          color: var(--text-primary);
-        }
-        .task-modal-body {
-          padding: 20px;
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-        }
-        .task-field {
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-        }
-        .task-label {
-          font-size: 12px;
-          font-weight: 600;
-          color: var(--text-secondary);
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-        }
-        .task-textarea {
-          background: rgba(0,0,0,0.3);
-          border: 1px solid var(--glass-border);
-          border-radius: 10px;
-          padding: 12px 14px;
-          color: var(--text-primary);
-          font-size: 14px;
-          font-family: inherit;
-          resize: vertical;
-          min-height: 100px;
-          outline: none;
-        }
-        .task-textarea:focus {
-          border-color: var(--accent-cyan);
-        }
-        .task-select {
-          background: rgba(0,0,0,0.3);
-          border: 1px solid var(--glass-border);
-          border-radius: 10px;
-          padding: 12px 14px;
-          color: var(--text-primary);
-          font-size: 14px;
-          outline: none;
-          cursor: pointer;
-        }
-        .task-select:focus {
-          border-color: var(--accent-cyan);
-        }
-        .task-modal-actions {
-          display: flex;
-          gap: 12px;
-          padding: 0 20px 20px;
-          justify-content: flex-end;
-        }
-        .task-btn {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 10px 20px;
-          border-radius: 8px;
-          font-size: 13px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          border: none;
-        }
-        .task-btn.secondary {
-          background: rgba(255,255,255,0.05);
-          color: var(--text-secondary);
-          border: 1px solid var(--glass-border);
-        }
-        .task-btn.secondary:hover:not(:disabled) {
-          background: rgba(255,255,255,0.1);
-        }
-        .task-btn.primary {
-          background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
-          color: white;
-        }
-        .task-btn.primary:hover:not(:disabled) {
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(0, 212, 255, 0.3);
-        }
-        .task-btn:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
       `}</style>
     </main>
   )

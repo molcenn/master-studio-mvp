@@ -18,8 +18,8 @@ function renderMarkdown(text: string): string {
       return `<div class="chat-code-card">
         <div class="chat-code-card-header">
           <span class="chat-code-lang">${lang || 'code'}</span>
-          <span class="chat-code-lines">${lineCount} satır</span>
-          <button class="chat-code-copy" onclick="navigator.clipboard.writeText(document.getElementById('${id}').textContent);this.textContent='✓ Kopyalandı';setTimeout(()=>this.textContent='Kopyala',1500)">Kopyala</button>
+          <span class="chat-code-lines">${lineCount} lines</span>
+          <button class="chat-code-copy" onclick="navigator.clipboard.writeText(document.getElementById('${id}').textContent);this.textContent='✓ Copied';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
         </div>
         <div class="chat-code-scroll">
           <pre class="chat-code-content" id="${id}"><code>${fullCode}</code></pre>
@@ -53,14 +53,16 @@ interface ChatPanelProps {
 
 const MODEL_DISPLAY_NAMES: Record<string, string> = {
   kimi: 'Kimi K2.5',
-  sonnet: 'Claude Sonnet',
-  opus: 'Claude Opus',
+  sonnet: 'Sonnet 4.5',
+  opus: 'Opus 4.6',
+  'gpt-4o': 'GPT-4o',
 }
 
 const MODEL_BADGE_COLORS: Record<string, { bg: string; text: string }> = {
   kimi: { bg: 'rgba(0,212,255,0.15)', text: '#00d4ff' },
   sonnet: { bg: 'rgba(236,72,153,0.15)', text: '#ec4899' },
   opus: { bg: 'rgba(168,85,247,0.15)', text: '#a855f7' },
+  'gpt-4o': { bg: 'rgba(34,197,94,0.15)', text: '#22c55e' },
 }
 
 export default function ChatPanel({ projectId = '00000000-0000-0000-0000-000000000001', onHtmlDetected }: ChatPanelProps) {
@@ -88,23 +90,23 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
   const handleSend = async () => {
     if (!input.trim()) return
 
+    const msg = input.trim()
+    setInput('') // Clear immediately for better UX
+
     // Model command sync
-    if (input.trim().startsWith('/model ')) {
-      const model = input.trim().split(' ')[1]
-      if (['kimi', 'sonnet', 'opus'].includes(model)) {
+    if (msg.startsWith('/model ')) {
+      const model = msg.split(' ')[1]
+      if (['kimi', 'sonnet', 'opus', 'gpt-4o'].includes(model)) {
         setSelectedModel(model)
       }
     }
 
     // Spawn command
-    if (input.trim().startsWith('/spawn ')) {
-      const task = input.trim().substring(7)
-      // Kullanıcı mesajını göster
-      const userMsg = input
-      setInput('')
-      await sendMessage(userMsg)
+    if (msg.startsWith('/spawn ')) {
+      const task = msg.substring(7)
+      await sendMessage(msg)
 
-      // Arka planda spawn API'ye gönder
+      // Send to spawn API in background
       try {
         const res = await fetch('/api/ai/spawn', {
           method: 'POST',
@@ -113,7 +115,8 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
             task,
             model: selectedModel === 'kimi' ? 'moonshot/kimi-k2.5' :
                    selectedModel === 'sonnet' ? 'anthropic/claude-sonnet-4-5-20250929' :
-                   selectedModel === 'opus' ? 'anthropic/claude-opus-4-6' : 'moonshot/kimi-k2.5'
+                   selectedModel === 'opus' ? 'anthropic/claude-opus-4-6' :
+                   selectedModel === 'gpt-4o' ? 'openai/gpt-4o' : 'moonshot/kimi-k2.5'
           })
         })
         const data = await res.json()
@@ -124,8 +127,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
       return
     }
 
-    await sendMessage(input)
-    setInput('')
+    await sendMessage(msg)
   }
 
   const handleFileClick = () => {
@@ -153,13 +155,13 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
           className={`chat-tab ${activeTab === 'chat' ? 'active' : ''}`}
           onClick={() => setActiveTab('chat')}
         >
-          Sohbet
+          Chat
         </button>
         <button 
           className={`chat-tab ${activeTab === 'swarm' ? 'active' : ''}`}
           onClick={() => setActiveTab('swarm')}
         >
-          Agent Swarm
+          Agents
         </button>
       </div>
 
@@ -172,9 +174,9 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
                 <div className="message-header">
                   <span className="message-agent-name">Betsy</span>
                   <span className="message-model">{MODEL_DISPLAY_NAMES[selectedModel]}</span>
-                  <span className="message-time">şimdi</span>
+                  <span className="message-time">now</span>
                 </div>
-                Merhaba Murat! AI Agent Dashboard projesinde sana nasıl yardımcı olabilirim? ✦
+                Hello! How can I help you with your project today? ✦
               </div>
             ) : (
               messages.map((msg: any) => (
@@ -184,7 +186,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
                       <span className="message-agent-name">Betsy</span>
                       <span className="message-model">{MODEL_DISPLAY_NAMES[selectedModel]}</span>
                       <span className="message-time">
-                        {new Date(msg.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(msg.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
                   )}
@@ -226,7 +228,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
                 <div className="message-header">
                   <span className="message-agent-name">Betsy</span>
                   <span className="message-model">{MODEL_DISPLAY_NAMES[selectedModel]}</span>
-                  <span className="message-time">şimdi</span>
+                  <span className="message-time">now</span>
                 </div>
                 <div dangerouslySetInnerHTML={{ __html: renderMarkdown(streamingContent) }} />
               </div>
@@ -239,7 +241,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
                   <div className="thinking-dot"></div>
                   <div className="thinking-dot"></div>
                 </div>
-                <span className="thinking-text">Düşünüyor...</span>
+                <span className="thinking-text">Thinking...</span>
               </div>
             )}
             <div ref={messagesEndRef} />
@@ -266,10 +268,10 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
                 zIndex: 100,
               }}>
                 <div style={{ padding: '4px 8px', cursor: 'pointer' }} onClick={() => setInput('/model ')}>
-                  <span style={{ color: 'var(--accent-cyan)' }}>/model</span> kimi|sonnet|opus — Model değiştir
+                  <span style={{ color: 'var(--accent-cyan)' }}>/model</span> kimi|sonnet|opus|gpt-4o — Switch model
                 </div>
                 <div style={{ padding: '4px 8px', cursor: 'pointer' }} onClick={() => setInput('/spawn ')}>
-                  <span style={{ color: 'var(--accent-purple)' }}>/spawn</span> [görev] — Sub-agent başlat
+                  <span style={{ color: 'var(--accent-purple)' }}>/spawn</span> [task] — Start sub-agent
                 </div>
               </div>
             )}
@@ -282,12 +284,12 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
                   className="hidden"
                   accept="*/*"
                 />
-                <button className="chat-action-btn" onClick={handleFileClick} title="Dosya ekle">
+                <button className="chat-action-btn" onClick={handleFileClick} title="Upload file">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
                   </svg>
                 </button>
-                <button className="chat-action-btn" title="Ses kaydet">
+                <button className="chat-action-btn" title="Record voice">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
                     <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
@@ -300,7 +302,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
-                placeholder="Mesaj yazın... (/model, /spawn komutları)"
+                placeholder="Type a message... (/model, /spawn)"
                 className="chat-input"
                 rows={2}
                 disabled={isLoading}
@@ -309,7 +311,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
                 <button 
                   onClick={stopGeneration}
                   className="stop-btn"
-                  title="Durdur"
+                  title="Stop"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                     <rect x="6" y="6" width="12" height="12" rx="2"/>
@@ -328,6 +330,33 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
                 </button>
               )}
             </div>
+            {/* Bottom Model Selector */}
+            <div style={{ padding: '6px 0 0', display: 'flex', justifyContent: 'flex-end' }}>
+              <select 
+                value={selectedModel} 
+                onChange={(e) => {
+                  const newModel = e.target.value
+                  setSelectedModel(newModel)
+                  sendMessage('/model ' + newModel)
+                }}
+                style={{ 
+                  height: '24px', 
+                  padding: '2px 8px', 
+                  borderRadius: '4px', 
+                  border: '1px solid var(--glass-border)', 
+                  background: 'rgba(0,0,0,0.25)', 
+                  color: 'var(--text-secondary)', 
+                  fontSize: '11px',
+                  cursor: 'pointer',
+                  outline: 'none'
+                }}
+              >
+                <option value="kimi">Kimi K2.5</option>
+                <option value="sonnet">Sonnet 4.5</option>
+                <option value="opus">Opus 4.6</option>
+                <option value="gpt-4o">GPT-4o</option>
+              </select>
+            </div>
           </div>
         </>
       ) : (
@@ -340,11 +369,12 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
               sendMessage('/model ' + newModel)
             }}
             style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.25)', color: 'var(--text-primary)', fontSize: '13px', marginBottom: '12px' }}>
-            <option value="kimi">Kimi K2.5 — Hızlı, günlük görevler</option>
+            <option value="kimi">Kimi K2.5 — Fast, daily tasks</option>
             <option value="sonnet">Claude Sonnet — UI/UX, coding</option>
-            <option value="opus">Claude Opus — Derin analiz, review</option>
+            <option value="opus">Claude Opus — Deep analysis, review</option>
+            <option value="gpt-4o">GPT-4o — General purpose</option>
           </select>
-          <div className="swarm-section-title">Aktif Agent'lar</div>
+          <div className="swarm-section-title">Active Agents</div>
           <div className="swarm-agent-card">
             <div className="swarm-agent-header">
               <div className="swarm-avatar cyan">K</div>
@@ -354,7 +384,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
               </div>
               <div className="swarm-status">
                 <div className="swarm-status-dot working"></div>
-                <span>Çalışıyor</span>
+                <span>Working</span>
               </div>
             </div>
             <div className="swarm-task">Dashboard layout refactoring</div>
@@ -374,10 +404,10 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
               </div>
               <div className="swarm-status">
                 <div className="swarm-status-dot idle"></div>
-                <span>Bekliyor</span>
+                <span>Idle</span>
               </div>
             </div>
-            <div className="swarm-task">Review queue'da görev bekliyor</div>
+            <div className="swarm-task">Waiting for task in review queue</div>
           </div>
 
           <div className="swarm-agent-card">
@@ -389,10 +419,10 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
               </div>
               <div className="swarm-status">
                 <div className="swarm-status-dot working"></div>
-                <span>Çalışıyor</span>
+                <span>Working</span>
               </div>
             </div>
-            <div className="swarm-task">Wireframe alternatifleri hazırlıyor</div>
+            <div className="swarm-task">Preparing wireframe alternatives</div>
             <div className="swarm-progress">
               <div className="swarm-progress-bar">
                 <div className="swarm-progress-fill pink" style={{ width: '45%' }}></div>
@@ -409,10 +439,10 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
               </div>
               <div className="swarm-status">
                 <div className="swarm-status-dot waiting"></div>
-                <span>Review Bekliyor</span>
+                <span>Awaiting Review</span>
               </div>
             </div>
-            <div className="swarm-task">API endpoint testleri tamamlandı</div>
+            <div className="swarm-task">API endpoint tests completed</div>
           </div>
         </div>
       )}
@@ -651,11 +681,12 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
         .hidden { display: none; }
         .chat-code-card {
           background: rgba(10, 10, 20, 0.85);
-          border: 1px solid rgba(255,255,255,0.1);
-          border-radius: 10px;
-          margin: 10px 0;
+          border: 1px solid var(--glass-border);
+          border-radius: 8px;
+          margin: 6px 0;
+          max-width: 95%;
           overflow: hidden;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          box-shadow: 0 2px 8px rgba(0,0,0,0.2);
         }
         .chat-code-card-header {
           display: flex;
@@ -694,7 +725,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
           color: var(--text-primary);
         }
         .chat-code-scroll {
-          max-height: 200px;
+          max-height: 150px;
           overflow-y: auto;
           overflow-x: hidden;
         }

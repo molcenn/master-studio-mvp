@@ -38,8 +38,9 @@ interface Review {
   diff: string | null
 }
 
-type ViewType = 'dashboard' | 'workspace' | 'files' | 'milestones' | 'agents' | 'reviews'
+type ViewType = 'dashboard' | 'workspace' | 'files' | 'agents' | 'reviews'
 type ReviewFilter = 'all' | 'pending' | 'approved' | 'rejected'
+type IdeTabType = 'code' | 'preview' | 'details' | 'milestones'
 
 interface Milestone {
   id: string
@@ -51,6 +52,22 @@ interface Milestone {
   projectId: string
 }
 
+interface Agent {
+  id: string
+  name: string
+  model: 'kimi' | 'sonnet' | 'opus' | 'gpt4o'
+  description: string
+  createdAt: string
+  isDefault?: boolean
+}
+
+const MODEL_LABELS: Record<Agent['model'], string> = {
+  kimi: 'Kimi K2.5',
+  sonnet: 'Sonnet 4.5',
+  opus: 'Opus 4.6',
+  gpt4o: 'GPT-4o'
+}
+
 interface MainWorkspaceProps {
   activeProject: string
   activeView: ViewType
@@ -59,7 +76,7 @@ interface MainWorkspaceProps {
 }
 
 const PROJECT_COLORS = ['#00d4ff', '#a855f7', '#ec4899', '#22c55e', '#f59e0b', '#ef4444', '#3b82f6']
-const STATUS_VARIANTS = ['Aktif', 'Review', 'Planlama'] as const
+const STATUS_VARIANTS = ['Active', 'Review', 'Planning'] as const
 
 function getProjectColor(index: number) {
   return PROJECT_COLORS[index % PROJECT_COLORS.length]
@@ -95,18 +112,18 @@ function getStatusFromIndex(index: number) {
 
 function getStatusClass(status: string) {
   switch (status) {
-    case 'Aktif': return 'status-active'
+    case 'Active': return 'status-active'
     case 'Review': return 'status-review'
-    case 'Planlama': return 'status-planning'
+    case 'Planning': return 'status-planning'
     default: return 'status-active'
   }
 }
 
 function getProgressFromStatus(status: string) {
   switch (status) {
-    case 'Aktif': return 75
+    case 'Active': return 75
     case 'Review': return 90
-    case 'Planlama': return 25
+    case 'Planning': return 25
     default: return 50
   }
 }
@@ -119,10 +136,10 @@ function timeAgo(date: string) {
   const diffHours = Math.floor(diffMs / 3600000)
   const diffDays = Math.floor(diffMs / 86400000)
 
-  if (diffMins < 60) return `${diffMins} dk önce`
-  if (diffHours < 24) return `${diffHours} saat önce`
-  if (diffDays === 1) return '1 gün önce'
-  return `${diffDays} gün önce`
+  if (diffMins < 60) return `${diffMins} min ago`
+  if (diffHours < 24) return `${diffHours} hours ago`
+  if (diffDays === 1) return '1 day ago'
+  return `${diffDays} days ago`
 }
 
 interface Message {
@@ -156,7 +173,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // IDE view state
-  const [ideTab, setIdeTab] = useState<'code' | 'preview' | 'details'>('code')
+  const [ideTab, setIdeTab] = useState<IdeTabType>('code')
   const [codeBlocks, setCodeBlocks] = useState<{lang: string, code: string}[]>([])
   const [selectedBlock, setSelectedBlock] = useState(0)
   const [copied, setCopied] = useState(false)
@@ -175,90 +192,75 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
   const [newMilestone, setNewMilestone] = useState({ title: '', description: '', dueDate: '' })
   const [newTaskText, setNewTaskText] = useState<{[key: string]: string}>({})
 
-  // Agent Swarm state
-  interface SwarmTask {
-    id: string
-    task: string
-    model: string
-    status: 'running' | 'completed' | 'error'
-    createdAt: string
-    result?: string
-  }
-  const [swarmTasks, setSwarmTasks] = useState<SwarmTask[]>([])
-  const [showTaskModal, setShowTaskModal] = useState(false)
-  const [selectedAgent, setSelectedAgent] = useState<{name: string, model: string} | null>(null)
-  const [taskInput, setTaskInput] = useState('')
-  const [taskModel, setTaskModel] = useState('moonshot/kimi-k2.5')
-  const [isSpawning, setIsSpawning] = useState(false)
+  // Agents state
+  const [agents, setAgents] = useState<Agent[]>([])
+  const [showAgentForm, setShowAgentForm] = useState(false)
+  const [newAgent, setNewAgent] = useState<{ name: string; model: Agent['model']; description: string }>({
+    name: '',
+    model: 'kimi',
+    description: ''
+  })
+  const [activeAgentId, setActiveAgentId] = useState<string | null>(null)
 
-  // Load swarm tasks from localStorage
+  // Load agents from localStorage
   useEffect(() => {
-    const saved = localStorage.getItem('master-studio-swarm-tasks')
+    const saved = localStorage.getItem('master-studio-agents')
     if (saved) {
       try {
-        setSwarmTasks(JSON.parse(saved))
+        setAgents(JSON.parse(saved))
       } catch (e) {
-        console.error('Error loading swarm tasks:', e)
+        console.error('Error loading agents:', e)
       }
+    }
+    const savedActive = localStorage.getItem('active-agent-id')
+    if (savedActive) {
+      setActiveAgentId(savedActive)
     }
   }, [])
 
-  // Save swarm tasks to localStorage
+  // Save agents to localStorage
   useEffect(() => {
-    localStorage.setItem('master-studio-swarm-tasks', JSON.stringify(swarmTasks))
-  }, [swarmTasks])
+    localStorage.setItem('master-studio-agents', JSON.stringify(agents))
+  }, [agents])
 
-  // Spawn sub-agent task
-  const spawnTask = async () => {
-    if (!taskInput.trim()) return
-    
-    setIsSpawning(true)
-    const taskId = Date.now().toString()
-    
-    // Add to active tasks
-    const newTask: SwarmTask = {
-      id: taskId,
-      task: taskInput.slice(0, 100) + (taskInput.length > 100 ? '...' : ''),
-      model: taskModel,
-      status: 'running',
-      createdAt: new Date().toISOString()
+  // Save active agent ID to localStorage
+  useEffect(() => {
+    if (activeAgentId) {
+      localStorage.setItem('active-agent-id', activeAgentId)
     }
-    setSwarmTasks(prev => [newTask, ...prev])
+  }, [activeAgentId])
+
+  // Create new agent
+  const createAgent = () => {
+    if (!newAgent.name.trim()) return
     
-    try {
-      const res = await fetch('/api/ai/spawn', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task: taskInput, model: taskModel })
-      })
-      
-      const data = await res.json()
-      
-      // Update task status
-      setSwarmTasks(prev => prev.map(t => 
-        t.id === taskId 
-          ? { ...t, status: data.success ? 'completed' : 'error', result: data.response || data.error }
-          : t
-      ))
-      
-      setShowTaskModal(false)
-      setTaskInput('')
-    } catch (err: any) {
-      setSwarmTasks(prev => prev.map(t => 
-        t.id === taskId 
-          ? { ...t, status: 'error', result: err.message }
-          : t
-      ))
-    } finally {
-      setIsSpawning(false)
+    const agent: Agent = {
+      id: crypto.randomUUID(),
+      name: newAgent.name.trim(),
+      model: newAgent.model,
+      description: newAgent.description.trim(),
+      createdAt: new Date().toISOString(),
+      isDefault: false
+    }
+    
+    setAgents(prev => [...prev, agent])
+    setNewAgent({ name: '', model: 'kimi', description: '' })
+    setShowAgentForm(false)
+  }
+
+  // Delete agent
+  const deleteAgent = (id: string) => {
+    setAgents(prev => prev.filter(a => a.id !== id))
+    if (activeAgentId === id) {
+      setActiveAgentId(null)
+      localStorage.removeItem('active-agent-id')
     }
   }
 
-  // Open task modal for agent
-  const openTaskModal = (agentName: string, defaultModel: string) => {
-    setSelectedAgent({ name: agentName, model: defaultModel })
-    setTaskModel(defaultModel)
-    setShowTaskModal(true)
+  // Open chat with agent
+  const openChat = (agentId: string) => {
+    setActiveAgentId(agentId)
+    localStorage.setItem('active-agent-id', agentId)
   }
 
   // Fetch stats and projects
@@ -520,6 +522,16 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
       })
       if (res.ok) {
         fetchReviews() // Refresh reviews
+        
+        // Store action in localStorage for chat sync
+        const actionData = { reviewId: id, action: status, timestamp: Date.now() }
+        const existing = localStorage.getItem('review-actions')
+        const actions = existing ? JSON.parse(existing) : []
+        actions.push(actionData)
+        localStorage.setItem('review-actions', JSON.stringify(actions))
+        
+        // Dispatch custom event to notify chat panel
+        window.dispatchEvent(new CustomEvent('review-action', { detail: actionData }))
       }
     } catch (err) {
       console.error('Error updating review:', err)
@@ -529,9 +541,9 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
   // Get status badge text and class
   const getStatusBadgeInfo = (status: string) => {
     switch (status) {
-      case 'pending': return { text: 'Bekliyor', className: 'status-badge-pending' }
-      case 'approved': return { text: 'Onaylandı', className: 'status-badge-approved' }
-      case 'rejected': return { text: 'Düzeltilecek', className: 'status-badge-rejected' }
+      case 'pending': return { text: 'Pending', className: 'status-badge-pending' }
+      case 'approved': return { text: 'Approved', className: 'status-badge-approved' }
+      case 'rejected': return { text: 'Needs Fix', className: 'status-badge-rejected' }
       default: return { text: status, className: '' }
     }
   }
@@ -539,10 +551,10 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
   // Get type badge text
   const getTypeBadgeInfo = (type: string) => {
     switch (type) {
-      case 'code': return { text: 'Kod', className: 'type-badge-code' }
+      case 'code': return { text: 'Code', className: 'type-badge-code' }
       case 'feature': return { text: 'Feature', className: 'type-badge-feature' }
-      case 'design': return { text: 'Tasarım', className: 'type-badge-design' }
-      case 'decision': return { text: 'Karar', className: 'type-badge-decision' }
+      case 'design': return { text: 'Design', className: 'type-badge-design' }
+      case 'decision': return { text: 'Decision', className: 'type-badge-decision' }
       default: return { text: type, className: '' }
     }
   }
@@ -622,9 +634,9 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
 
   const getStatusLabel = (status: Milestone['status']) => {
     switch (status) {
-      case 'planned': return 'Planlandı'
-      case 'in-progress': return 'Devam Ediyor'
-      case 'completed': return 'Tamamlandı'
+      case 'planned': return 'Planned'
+      case 'in-progress': return 'In Progress'
+      case 'completed': return 'Completed'
     }
   }
 
@@ -643,8 +655,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
   const viewTitles: Record<ViewType, string> = {
     dashboard: displayProject ? displayProject.name : 'Dashboard',
     workspace: 'Workspace',
-    files: displayProject ? `${displayProject.name} — Dosyalar` : 'Files',
-    milestones: 'Milestones',
+    files: displayProject ? `${displayProject.name} — Files` : 'Files',
     agents: 'Agents',
     reviews: 'Reviews'
   }
@@ -694,15 +705,15 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
           <>
             {loading ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px', color: 'var(--text-tertiary)' }}>
-                Yükleniyor...
+                Loading...
               </div>
             ) : (
               <>
                 {/* Welcome */}
                 <div className="welcome-section">
-                  <div className="welcome-greeting">Günaydın, <span>Murat</span> ✦</div>
+                  <div className="welcome-greeting">Good morning, <span>Murat</span> ✦</div>
                   <div className="welcome-summary">
-                    {stats?.projectCount || 0} aktif proje · {stats?.activeAgents || 0} agent çalışıyor · {stats?.pendingReviews || 0} review bekliyor
+                    {stats?.projectCount || 0} active projects · {stats?.activeAgents || 0} agents working · {stats?.pendingReviews || 0} pending reviews
                   </div>
                 </div>
 
@@ -710,26 +721,26 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                 <div className="stats-row">
                   <div className="stat-card">
                     <div className="stat-value gradient">{stats?.projectCount || 0}</div>
-                    <div className="stat-label">Aktif Proje</div>
+                    <div className="stat-label">Active Projects</div>
                   </div>
                   <div className="stat-card">
                     <div className="stat-value" style={{ color: 'var(--accent-green)' }}>{stats?.activeAgents || 0}</div>
-                    <div className="stat-label">Çalışan Agent</div>
+                    <div className="stat-label">Active Agents</div>
                   </div>
                   <div className="stat-card">
                     <div className="stat-value" style={{ color: 'var(--accent-amber)' }}>{stats?.pendingReviews || 0}</div>
-                    <div className="stat-label">Bekleyen Review</div>
+                    <div className="stat-label">Pending Reviews</div>
                   </div>
                   <div className="stat-card">
                     <div className="stat-value" style={{ color: 'var(--accent-cyan)' }}>{stats?.todayMessageCount || 0}</div>
-                    <div className="stat-label">Bugünkü Mesaj</div>
+                    <div className="stat-label">Today's Messages</div>
                   </div>
                 </div>
 
                 {/* Active Projects */}
                 <div className="section-header">
-                  <span className="section-title">Aktif Projeler</span>
-                  <button className="section-action">Tümünü Gör →</button>
+                  <span className="section-title">Active Projects</span>
+                  <button className="section-action">View All →</button>
                 </div>
                 <div className="project-cards">
                   {projects.slice(0, 3).map((project, index) => {
@@ -748,7 +759,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                         <div className="project-card-header">
                           <div>
                             <div className="project-card-name">{project.name}</div>
-                            <div className="project-card-client">{messageCount} mesaj</div>
+                            <div className="project-card-client">{messageCount} messages</div>
                           </div>
                           <span className={`project-card-status ${getStatusClass(status)}`}>{status}</span>
                         </div>
@@ -776,8 +787,8 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
 
                 {/* Review Queue */}
                 <div className="section-header">
-                  <span className="section-title">Bekleyen Review'lar</span>
-                  <button className="section-action">Tümünü Gör →</button>
+                  <span className="section-title">Pending Reviews</span>
+                  <button className="section-action">View All →</button>
                 </div>
                 <div className="review-list">
                   <div className="review-item">
@@ -789,9 +800,9 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                     </div>
                     <div className="review-info">
                       <div className="review-title">API endpoint refactoring</div>
-                      <div className="review-meta">coding-agent · Agent Dashboard · 10 dk önce</div>
+                      <div className="review-meta">coding-agent · Agent Dashboard · 10 min ago</div>
                     </div>
-                    <span className="review-priority priority-urgent">Acil</span>
+                    <span className="review-priority priority-urgent">Urgent</span>
                   </div>
 
                   <div className="review-item">
@@ -804,7 +815,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                     </div>
                     <div className="review-info">
                       <div className="review-title">Hero image generation v3</div>
-                      <div className="review-meta">dalle-agent · Lansman Videosu · 1 saat önce</div>
+                      <div className="review-meta">dalle-agent · Launch Video · 1 hour ago</div>
                     </div>
                     <span className="review-priority priority-normal">Normal</span>
                   </div>
@@ -848,8 +859,8 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                           <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
                         </svg>
-                        <div style={{ fontSize: '14px', fontWeight: 500 }}>Henüz kod bloğu yok</div>
-                        <div style={{ fontSize: '12px' }}>Chat'te ``` ile kod yazın — otomatik yakalanır</div>
+                        <div style={{ fontSize: '14px', fontWeight: 500 }}>No code blocks yet</div>
+                        <div style={{ fontSize: '12px' }}>Type code with ``` in chat — auto captured</div>
                       </div>
                     ) : (
                       <>
@@ -871,7 +882,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                                 await navigator.clipboard.writeText(codeBlocks[selectedBlock].code)
                                 setCopied(true); setTimeout(() => setCopied(false), 2000)
                               }}>
-                                {copied ? '✓ Kopyalandı' : 'Kopyala'}
+                                {copied ? '✓ Copied' : 'Copy'}
                               </button>
                             </div>
                             <pre className="code-pre"><code>{codeBlocks[selectedBlock].code}</code></pre>
@@ -903,14 +914,14 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                             <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
                           </svg>
-                          <div style={{ fontSize: '14px', fontWeight: 500 }}>Chat'ten HTML/CSS/JS kodu isteyin</div>
-                          <div style={{ fontSize: '12px' }}>Kod otomatik olarak burada görünecek</div>
+                          <div style={{ fontSize: '14px', fontWeight: 500 }}>Ask for HTML/CSS/JS code in chat</div>
+                          <div style={{ fontSize: '12px' }}>Code will automatically appear here</div>
                         </div>
                       ) : (
                         <>
                           <div className="preview-toolbar">
-                            <button className="preview-action-btn" onClick={() => setPreviewKey(k => k + 1)}>↻ Yenile</button>
-                            <button className="preview-action-btn" onClick={() => setIsFullscreen(true)}>⛶ Tam Ekran</button>
+                            <button className="preview-action-btn" onClick={() => setPreviewKey(k => k + 1)}>↻ Refresh</button>
+                            <button className="preview-action-btn" onClick={() => setIsFullscreen(true)}>⛶ Fullscreen</button>
                           </div>
                           <div className="preview-frame-wrap">
                             <iframe key={previewKey} srcDoc={previewHTML} sandbox="allow-scripts" className="preview-iframe" title="Preview" />
@@ -942,11 +953,11 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                             onKeyDown={(e) => { if (e.key === 'Enter') updateProjectName(); if (e.key === 'Escape') { setIsEditingName(false); setEditName(activeProjectData?.name || '') } }}
                             onBlur={() => { if (editName.trim() !== activeProjectData?.name) updateProjectName(); else setIsEditingName(false) }}
                             autoFocus className="name-input" />
-                          {isSaving && <span className="saving-indicator">Kaydediliyor...</span>}
+                          {isSaving && <span className="saving-indicator">Saving...</span>}
                         </div>
                       ) : (
-                        <h1 className="project-title" onClick={() => { setEditName(activeProjectData?.name || ''); setIsEditingName(true) }} title="Düzenlemek için tıklayın">
-                          {activeProjectData?.name || 'Yükleniyor...'}
+                        <h1 className="project-title" onClick={() => { setEditName(activeProjectData?.name || ''); setIsEditingName(true) }} title="Click to edit">
+                          {activeProjectData?.name || 'Loading...'}
                           <svg className="edit-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                           </svg>
@@ -959,31 +970,31 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                         </span>
                         <span className="meta-item">
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                          {activeProjectData?.messages?.[0]?.count || 0} mesaj
+                          {activeProjectData?.messages?.[0]?.count || 0} messages
                         </span>
                       </div>
                     </div>
                     <div className="quick-actions">
                       <button className="action-btn primary" onClick={() => setActiveView('dashboard')}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                        Chat'e Git
+                        Go to Chat
                       </button>
                       <button className="action-btn secondary" onClick={() => setActiveView('files')}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
-                        Dosyalar
+                        Files
                       </button>
                       <button className="action-btn danger" onClick={() => setShowDeleteModal(true)}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                        Projeyi Sil
+                        Delete Project
                       </button>
                     </div>
                     <div className="messages-section">
                       <h3 className="section-heading">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                        Son Mesajlar
+                        Recent Messages
                       </h3>
                       {recentMessages.length === 0 ? (
-                        <div className="no-messages">Henüz mesaj yok</div>
+                        <div className="no-messages">No messages yet</div>
                       ) : (
                         <div className="messages-list">
                           {recentMessages.map((msg) => (
@@ -1131,430 +1142,133 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
           </div>
         )}
 
-        {activeView === 'milestones' && (
-          <div className="milestones-container">
+        {activeView === 'agents' && (
+          <div className="agents-view">
             {/* Header */}
-            <div className="milestones-header">
-              <button 
-                className="milestone-add-btn"
-                onClick={() => setShowMilestoneForm(!showMilestoneForm)}
-              >
+            <div className="agents-header">
+              <h2 className="agents-title">Agents</h2>
+              <button className="new-agent-btn" onClick={() => setShowAgentForm(true)}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <line x1="12" y1="5" x2="12" y2="19"/>
                   <line x1="5" y1="12" x2="19" y2="12"/>
                 </svg>
-                Yeni Milestone
+                New Agent
               </button>
             </div>
 
-            {/* New Milestone Form */}
-            {showMilestoneForm && (
-              <div className="milestone-form">
-                <input
-                  type="text"
-                  placeholder="Milestone başlığı..."
-                  value={newMilestone.title}
-                  onChange={(e) => setNewMilestone({ ...newMilestone, title: e.target.value })}
-                  className="milestone-input"
-                  onKeyDown={(e) => e.key === 'Enter' && addMilestone()}
-                  autoFocus
-                />
-                <textarea
-                  placeholder="Açıklama (opsiyonel)..."
-                  value={newMilestone.description}
-                  onChange={(e) => setNewMilestone({ ...newMilestone, description: e.target.value })}
-                  className="milestone-textarea"
-                  rows={2}
-                />
-                <div className="milestone-form-row">
-                  <input
-                    type="date"
-                    value={newMilestone.dueDate}
-                    onChange={(e) => setNewMilestone({ ...newMilestone, dueDate: e.target.value })}
-                    className="milestone-date-input"
-                  />
-                  <div className="milestone-form-actions">
-                    <button className="milestone-btn secondary" onClick={() => setShowMilestoneForm(false)}>İptal</button>
-                    <button className="milestone-btn primary" onClick={addMilestone}>Kaydet</button>
+            {/* New Agent Form */}
+            {showAgentForm && (
+              <div className="agent-form">
+                <div className="agent-form-header">
+                  <h3>Create New Agent</h3>
+                </div>
+                <div className="agent-form-body">
+                  <div className="agent-form-field">
+                    <label className="agent-form-label">Agent Name *</label>
+                    <input
+                      type="text"
+                      className="agent-form-input"
+                      placeholder="e.g., Research Assistant"
+                      value={newAgent.name}
+                      onChange={(e) => setNewAgent({ ...newAgent, name: e.target.value })}
+                      autoFocus
+                    />
                   </div>
-                </div>
-              </div>
-            )}
-
-            {/* Timeline */}
-            <div className="milestone-timeline">
-              {milestones.filter(m => !activeProject || m.projectId === activeProject || m.projectId === '').length === 0 ? (
-                <EmptyState 
-                  icon={<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-purple)" strokeWidth="1.5">
-                    <path d="M12 20V10"/>
-                    <path d="M18 20V4"/>
-                    <path d="M6 20v-4"/>
-                  </svg>}
-                  title="Henüz milestone yok"
-                  description="Yeni bir milestone ekleyerek projeye başlayın"
-                />
-              ) : (
-                milestones
-                  .filter(m => !activeProject || m.projectId === activeProject || m.projectId === '')
-                  .sort((a, b) => new Date(a.dueDate || '9999').getTime() - new Date(b.dueDate || '9999').getTime())
-                  .map((milestone) => (
-                    <div key={milestone.id} className="milestone-card">
-                      <div className={`milestone-dot ${milestone.status}`} />
-                      
-                      <div className="milestone-card-inner">
-                        {/* Card Header */}
-                        <div className="milestone-card-header">
-                          {editingMilestoneId === milestone.id ? (
-                            <input
-                              type="text"
-                              value={milestone.title}
-                              onChange={(e) => updateMilestone(milestone.id, { title: e.target.value })}
-                              onBlur={() => setEditingMilestoneId(null)}
-                              onKeyDown={(e) => e.key === 'Enter' && setEditingMilestoneId(null)}
-                              className="milestone-title-input"
-                              autoFocus
-                            />
-                          ) : (
-                            <h3 
-                              className="milestone-title"
-                              onClick={() => setEditingMilestoneId(milestone.id)}
-                              title="Düzenlemek için tıklayın"
-                            >
-                              {milestone.title}
-                              <svg className="edit-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                              </svg>
-                            </h3>
-                          )}
-                          <button 
-                            className="milestone-delete-btn"
-                            onClick={() => deleteMilestone(milestone.id)}
-                            title="Sil"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <polyline points="3 6 5 6 21 6"/>
-                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                            </svg>
-                          </button>
-                        </div>
-
-                        {/* Status Badge */}
-                        <button
-                          className="milestone-status-badge"
-                          onClick={() => updateMilestone(milestone.id, { status: cycleStatus(milestone.status) })}
-                          style={{ 
-                            background: `${getStatusColor(milestone.status)}20`,
-                            color: getStatusColor(milestone.status),
-                            borderColor: `${getStatusColor(milestone.status)}40`
-                          }}
-                        >
-                          {getStatusLabel(milestone.status)}
-                        </button>
-
-                        {/* Description */}
-                        {milestone.description && (
-                          <p className="milestone-description">{milestone.description}</p>
-                        )}
-
-                        {/* Due Date */}
-                        {milestone.dueDate && (
-                          <div className="milestone-due-date">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-                              <line x1="16" y1="2" x2="16" y2="6"/>
-                              <line x1="8" y1="2" x2="8" y2="6"/>
-                              <line x1="3" y1="10" x2="21" y2="10"/>
-                            </svg>
-                            {new Date(milestone.dueDate).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}
-                          </div>
-                        )}
-
-                        {/* Tasks */}
-                        <div className="milestone-tasks">
-                          {milestone.tasks.map((task) => (
-                            <div key={task.id} className="milestone-task">
-                              <input
-                                type="checkbox"
-                                checked={task.done}
-                                onChange={() => toggleTask(milestone.id, task.id)}
-                                className="milestone-task-checkbox"
-                              />
-                              <input
-                                type="text"
-                                value={task.text}
-                                onChange={(e) => updateTaskText(milestone.id, task.id, e.target.value)}
-                                className={`milestone-task-input ${task.done ? 'done' : ''}`}
-                              />
-                              <button
-                                className="milestone-task-delete"
-                                onClick={() => deleteTask(milestone.id, task.id)}
-                              >
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <line x1="18" y1="6" x2="6" y2="18"/>
-                                  <line x1="6" y1="6" x2="18" y2="18"/>
-                                </svg>
-                              </button>
-                            </div>
-                          ))}
-                          
-                          {/* Add Task */}
-                          <div className="milestone-task-add">
-                            <input
-                              type="text"
-                              placeholder="Yeni görev..."
-                              value={newTaskText[milestone.id] || ''}
-                              onChange={(e) => setNewTaskText({ ...newTaskText, [milestone.id]: e.target.value })}
-                              onKeyDown={(e) => e.key === 'Enter' && addTask(milestone.id)}
-                              className="milestone-task-input new"
-                            />
-                            <button
-                              className="milestone-task-add-btn"
-                              onClick={() => addTask(milestone.id)}
-                            >
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <line x1="12" y1="5" x2="12" y2="19"/>
-                                <line x1="5" y1="12" x2="19" y2="12"/>
-                              </svg>
-                              Ekle
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-              )}
-            </div>
-          </div>
-        )}
-
-        {activeView === 'agents' && (
-          <div className="agents-view">
-            {/* Swarm Status Panel */}
-            <div className="swarm-panel">
-              <div className="swarm-header">
-                <div className="swarm-title">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                    <path d="M2 17l10 5 10-5"/>
-                    <path d="M2 12l10 5 10-5"/>
-                  </svg>
-                  Aktif Görevler
-                  {swarmTasks.filter(t => t.status === 'running').length > 0 && (
-                    <span className="swarm-badge">
-                      {swarmTasks.filter(t => t.status === 'running').length}
-                    </span>
-                  )}
-                </div>
-                <span className="swarm-subtitle">
-                  {swarmTasks.length} görev · {swarmTasks.filter(t => t.status === 'running').length} çalışıyor
-                </span>
-              </div>
-              
-              {swarmTasks.length === 0 ? (
-                <div className="swarm-empty">
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" strokeWidth="1.5">
-                    <circle cx="12" cy="12" r="10"/>
-                    <path d="M12 8v8M8 12h8"/>
-                  </svg>
-                  <span>Henüz aktif görev yok</span>
-                </div>
-              ) : (
-                <div className="swarm-list">
-                  {swarmTasks.slice(0, 5).map((task) => (
-                    <div key={task.id} className={`swarm-task ${task.status}`}>
-                      <div className="swarm-task-icon">
-                        {task.status === 'running' && (
-                          <svg className="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/>
-                          </svg>
-                        )}
-                        {task.status === 'completed' && (
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2">
-                            <polyline points="20 6 9 17 4 12"/>
-                          </svg>
-                        )}
-                        {task.status === 'error' && (
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2">
-                            <circle cx="12" cy="12" r="10"/>
-                            <line x1="15" y1="9" x2="9" y2="15"/>
-                            <line x1="9" y1="9" x2="15" y2="15"/>
-                          </svg>
-                        )}
-                      </div>
-                      <div className="swarm-task-info">
-                        <div className="swarm-task-name">{task.task}</div>
-                        <div className="swarm-task-meta">
-                          <span className="swarm-task-model">{task.model.split('/').pop()}</span>
-                          <span className={`swarm-task-status ${task.status}`}>
-                            {task.status === 'running' ? 'Çalışıyor' : task.status === 'completed' ? 'Tamamlandı' : 'Hata'}
-                          </span>
-                          <span className="swarm-task-time">{timeAgo(task.createdAt)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {swarmTasks.length > 5 && (
-                    <div className="swarm-more">+{swarmTasks.length - 5} görev daha</div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="section-header">
-              <span className="section-title">AI Agent'larım</span>
-              <button className="section-action" onClick={() => setSwarmTasks([])}>Geçmişi Temizle</button>
-            </div>
-            <div className="agents-grid">
-              {/* Kimi K2.5 */}
-              <div className="agent-card">
-                <div className="agent-card-header">
-                  <div className="agent-avatar-large cyan">K</div>
-                  <div className="agent-info">
-                    <div className="agent-name">Kimi K2.5</div>
-                    <div className="agent-role">Ana Model</div>
-                  </div>
-                  <span className="agent-status-badge active">Aktif</span>
-                </div>
-                <div className="agent-description">Günlük görevler, hızlı yanıt, genel amaçlı üretim</div>
-                <button className="agent-task-btn" onClick={() => openTaskModal('Kimi K2.5', 'moonshot/kimi-k2.5')}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <line x1="12" y1="5" x2="12" y2="19"/>
-                    <line x1="5" y1="12" x2="19" y2="12"/>
-                  </svg>
-                  Görev Ver
-                </button>
-              </div>
-
-              {/* Claude Opus */}
-              <div className="agent-card">
-                <div className="agent-card-header">
-                  <div className="agent-avatar-large purple">O</div>
-                  <div className="agent-info">
-                    <div className="agent-name">Claude Opus</div>
-                    <div className="agent-role">Derin Analiz</div>
-                  </div>
-                  <span className="agent-status-badge pending">Beklemede</span>
-                </div>
-                <div className="agent-description">Kod review, mimari kararlar, karmaşık analizler</div>
-                <button className="agent-task-btn" onClick={() => openTaskModal('Claude Opus', 'anthropic/claude-opus-4')}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <line x1="12" y1="5" x2="12" y2="19"/>
-                    <line x1="5" y1="12" x2="19" y2="12"/>
-                  </svg>
-                  Görev Ver
-                </button>
-              </div>
-
-              {/* Claude Sonnet */}
-              <div className="agent-card">
-                <div className="agent-card-header">
-                  <div className="agent-avatar-large pink">S</div>
-                  <div className="agent-info">
-                    <div className="agent-name">Claude Sonnet</div>
-                    <div className="agent-role">UI/UX Geliştirme</div>
-                  </div>
-                  <span className="agent-status-badge pending">Beklemede</span>
-                </div>
-                <div className="agent-description">Component yazma, UI geliştirme, tasarım işleri</div>
-                <button className="agent-task-btn" onClick={() => openTaskModal('Claude Sonnet', 'anthropic/claude-sonnet-4')}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <line x1="12" y1="5" x2="12" y2="19"/>
-                    <line x1="5" y1="12" x2="19" y2="12"/>
-                  </svg>
-                  Görev Ver
-                </button>
-              </div>
-
-              {/* DALL-E */}
-              <div className="agent-card">
-                <div className="agent-card-header">
-                  <div className="agent-avatar-large green">D</div>
-                  <div className="agent-info">
-                    <div className="agent-name">DALL-E</div>
-                    <div className="agent-role">Görsel Üretimi</div>
-                  </div>
-                  <span className="agent-status-badge pending">Beklemede</span>
-                </div>
-                <div className="agent-description">Image generation, görsel içerik üretimi</div>
-                <button className="agent-task-btn" onClick={() => openTaskModal('DALL-E', 'openai/dall-e-3')}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <line x1="12" y1="5" x2="12" y2="19"/>
-                    <line x1="5" y1="12" x2="19" y2="12"/>
-                  </svg>
-                  Görev Ver
-                </button>
-              </div>
-            </div>
-
-            {/* Task Modal */}
-            {showTaskModal && (
-              <div className="modal-overlay" onClick={() => setShowTaskModal(false)}>
-                <div className="task-modal" onClick={(e) => e.stopPropagation()}>
-                  <div className="task-modal-header">
-                    <h3 className="task-modal-title">
-                      <span className="task-modal-agent">{selectedAgent?.name}</span>'e Görev Ver
-                    </h3>
-                    <button className="task-modal-close" onClick={() => setShowTaskModal(false)}>✕</button>
-                  </div>
-                  
-                  <div className="task-modal-body">
-                    <div className="task-field">
-                      <label className="task-label">Görev Açıklaması</label>
-                      <textarea
-                        className="task-textarea"
-                        placeholder="Örn: Bu projedeki tüm API endpoint'lerini kontrol et ve dökümantasyonunu oluştur..."
-                        value={taskInput}
-                        onChange={(e) => setTaskInput(e.target.value)}
-                        rows={4}
-                        autoFocus
-                      />
-                    </div>
-                    
-                    <div className="task-field">
-                      <label className="task-label">Model</label>
-                      <select 
-                        className="task-select"
-                        value={taskModel}
-                        onChange={(e) => setTaskModel(e.target.value)}
-                      >
-                        <option value="moonshot/kimi-k2.5">Kimi K2.5 (Hızlı)</option>
-                        <option value="anthropic/claude-sonnet-4">Claude Sonnet 4.5 (Kod)</option>
-                        <option value="anthropic/claude-opus-4">Claude Opus 4.6 (Derin)</option>
-                        <option value="openai/gpt-4o">GPT-4o</option>
-                      </select>
-                    </div>
-                  </div>
-                  
-                  <div className="task-modal-actions">
-                    <button className="task-btn secondary" onClick={() => setShowTaskModal(false)} disabled={isSpawning}>
-                      İptal
-                    </button>
-                    <button 
-                      className="task-btn primary" 
-                      onClick={spawnTask}
-                      disabled={!taskInput.trim() || isSpawning}
+                  <div className="agent-form-field">
+                    <label className="agent-form-label">Model</label>
+                    <select
+                      className="agent-form-select"
+                      value={newAgent.model}
+                      onChange={(e) => setNewAgent({ ...newAgent, model: e.target.value as Agent['model'] })}
                     >
-                      {isSpawning ? (
-                        <>
-                          <svg className="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/>
-                          </svg>
-                          Başlatılıyor...
-                        </>
-                      ) : (
-                        <>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <polygon points="5 3 19 12 5 21 5 3"/>
-                          </svg>
-                          Başlat
-                        </>
-                      )}
-                    </button>
+                      <option value="kimi">Kimi K2.5</option>
+                      <option value="sonnet">Sonnet 4.5</option>
+                      <option value="opus">Opus 4.6</option>
+                      <option value="gpt4o">GPT-4o</option>
+                    </select>
                   </div>
+                  <div className="agent-form-field">
+                    <label className="agent-form-label">Description</label>
+                    <textarea
+                      className="agent-form-textarea"
+                      placeholder="Optional description..."
+                      value={newAgent.description}
+                      onChange={(e) => setNewAgent({ ...newAgent, description: e.target.value })}
+                      rows={2}
+                    />
+                  </div>
+                </div>
+                <div className="agent-form-actions">
+                  <button className="agent-form-btn secondary" onClick={() => setShowAgentForm(false)}>Cancel</button>
+                  <button
+                    className="agent-form-btn primary"
+                    onClick={createAgent}
+                    disabled={!newAgent.name.trim()}
+                  >
+                    Create
+                  </button>
                 </div>
               </div>
             )}
+
+            {/* Agent List */}
+            <div className="agent-list">
+              {/* Main Agent (Betsy) - Always first */}
+              <div className={`agent-card ${activeAgentId === 'main-agent' ? 'active' : ''}`}>
+                <div className="agent-card-header">
+                  <div className="agent-avatar-large cyan">B</div>
+                  <div className="agent-info">
+                    <div className="agent-name">Main Agent (Betsy)</div>
+                    <div className="agent-model">Model: Kimi K2.5</div>
+                  </div>
+                  <span className="agent-status-badge active">Active</span>
+                </div>
+                <div className="agent-description">Default main agent</div>
+                <div className="agent-card-actions">
+                  <button className="agent-action-btn primary" onClick={() => openChat('main-agent')}>
+                    Open Chat
+                  </button>
+                </div>
+              </div>
+
+              {/* User-created agents */}
+              {agents.map((agent) => (
+                <div key={agent.id} className={`agent-card ${activeAgentId === agent.id ? 'active' : ''}`}>
+                  <div className="agent-card-header">
+                    <div className="agent-avatar-large purple">{agent.name.charAt(0).toUpperCase()}</div>
+                    <div className="agent-info">
+                      <div className="agent-name">{agent.name}</div>
+                      <div className="agent-model">Model: {MODEL_LABELS[agent.model]}</div>
+                    </div>
+                    <span className="agent-status-badge active">Active</span>
+                  </div>
+                  {agent.description && <div className="agent-description">{agent.description}</div>}
+                  <div className="agent-card-actions">
+                    <button className="agent-action-btn primary" onClick={() => openChat(agent.id)}>
+                      Open Chat
+                    </button>
+                    <button className="agent-action-btn danger" onClick={() => deleteAgent(agent.id)}>
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {agents.length === 0 && (
+                <div className="agents-empty">
+                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" strokeWidth="1.5">
+                    <path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"/>
+                    <path d="M8.5 8.5v.01"/>
+                    <path d="M16 15.5v.01"/>
+                    <path d="M12 12v.01"/>
+                    <path d="M11 17v.01"/>
+                    <path d="M7 14v.01"/>
+                  </svg>
+                  <p>No custom agents yet</p>
+                  <p className="agents-empty-hint">Click "New Agent" to create your first agent</p>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -1845,13 +1559,48 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
           color: var(--text-tertiary);
         }
         .agents-view { padding: 8px 0; }
-        .agents-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+        .agents-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 20px;
+          padding: 0 4px;
+        }
+        .agents-title {
+          font-size: 20px;
+          font-weight: 600;
+          color: var(--text-primary);
+        }
+        .new-agent-btn {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 16px;
+          background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+          border: none;
+          border-radius: 8px;
+          color: white;
+          font-size: 13px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+        .new-agent-btn:hover {
+          opacity: 0.9;
+          transform: translateY(-1px);
+        }
+        .agent-list {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
         .agent-card {
           background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border);
           border-radius: 16px; padding: 20px;
           transition: all 0.2s ease;
         }
-        .agent-card:hover { border-color: var(--glass-border-hover); background: rgba(0,0,0,0.3); transform: translateY(-2px); }
+        .agent-card:hover { border-color: var(--glass-border-hover); background: rgba(0,0,0,0.3); }
+        .agent-card.active { border-color: var(--accent-cyan); background: rgba(0,212,255,0.05); }
         .agent-card-header { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
         .agent-avatar-large {
           width: 48px; height: 48px; border-radius: 12px;
@@ -1864,6 +1613,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
         .agent-avatar-large.green { background: linear-gradient(135deg, var(--accent-green), #16a34a); }
         .agent-info { flex: 1; min-width: 0; }
         .agent-name { font-size: 15px; font-weight: 600; }
+        .agent-model { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
         .agent-role { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
         .agent-status-badge {
           font-size: 9px; padding: 4px 10px; border-radius: 10px;
@@ -1872,9 +1622,139 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
         }
         .agent-status-badge.active { background: rgba(34,197,94,0.15); color: var(--accent-green); }
         .agent-status-badge.pending { background: rgba(148,163,184,0.15); color: var(--text-tertiary); }
-        .agent-description { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+        .agent-description { font-size: 12px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 16px; }
+        .agent-card-actions {
+          display: flex;
+          gap: 8px;
+        }
+        .agent-action-btn {
+          padding: 6px 12px;
+          border-radius: 6px;
+          font-size: 12px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.15s ease;
+          border: none;
+        }
+        .agent-action-btn.primary {
+          background: var(--accent-cyan);
+          color: #000;
+        }
+        .agent-action-btn.primary:hover {
+          opacity: 0.9;
+        }
+        .agent-action-btn.danger {
+          background: rgba(239,68,68,0.15);
+          color: var(--accent-red);
+          border: 1px solid rgba(239,68,68,0.3);
+        }
+        .agent-action-btn.danger:hover {
+          background: rgba(239,68,68,0.25);
+        }
+        .agents-empty {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 48px;
+          color: var(--text-tertiary);
+          text-align: center;
+        }
+        .agents-empty p { margin: 4px 0; }
+        .agents-empty-hint {
+          font-size: 12px;
+          color: var(--text-secondary);
+        }
+        /* Agent Form */
+        .agent-form {
+          background: rgba(0,0,0,0.2);
+          border: 1px solid var(--glass-border);
+          border-radius: 16px;
+          padding: 20px;
+          margin-bottom: 20px;
+        }
+        .agent-form-header {
+          margin-bottom: 16px;
+        }
+        .agent-form-header h3 {
+          font-size: 14px;
+          font-weight: 600;
+          margin: 0;
+        }
+        .agent-form-body {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+          margin-bottom: 16px;
+        }
+        .agent-form-field {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .agent-form-label {
+          font-size: 12px;
+          font-weight: 500;
+          color: var(--text-secondary);
+        }
+        .agent-form-input,
+        .agent-form-select,
+        .agent-form-textarea {
+          background: rgba(0,0,0,0.3);
+          border: 1px solid var(--glass-border);
+          border-radius: 8px;
+          padding: 10px 12px;
+          color: var(--text-primary);
+          font-size: 13px;
+          font-family: inherit;
+          outline: none;
+          transition: border-color 0.15s ease;
+        }
+        .agent-form-input:focus,
+        .agent-form-select:focus,
+        .agent-form-textarea:focus {
+          border-color: var(--accent-cyan);
+        }
+        .agent-form-textarea {
+          resize: vertical;
+          min-height: 60px;
+        }
+        .agent-form-actions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 8px;
+        }
+        .agent-form-btn {
+          padding: 8px 16px;
+          border-radius: 8px;
+          font-size: 13px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.15s ease;
+          border: none;
+        }
+        .agent-form-btn.primary {
+          background: var(--accent-cyan);
+          color: #000;
+        }
+        .agent-form-btn.primary:hover:not(:disabled) {
+          opacity: 0.9;
+        }
+        .agent-form-btn.primary:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        .agent-form-btn.secondary {
+          background: rgba(255,255,255,0.06);
+          color: var(--text-secondary);
+          border: 1px solid var(--glass-border);
+        }
+        .agent-form-btn.secondary:hover {
+          background: rgba(255,255,255,0.1);
+          color: var(--text-primary);
+        }
         @media (max-width: 768px) {
-          .agents-grid { grid-template-columns: 1fr; }
+          .agent-card-actions { flex-wrap: wrap; }
         }
 
         /* Files View Styles */

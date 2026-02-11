@@ -8,7 +8,7 @@ interface Project {
   created_at: string
 }
 
-type ViewType = 'dashboard' | 'workspace' | 'files' | 'milestones' | 'agents' | 'reviews'
+type ViewType = 'dashboard' | 'workspace' | 'files' | 'agents' | 'reviews'
 
 interface SidebarProps {
   activeProject: string
@@ -106,13 +106,40 @@ export default function Sidebar({ activeProject, setActiveProject, user, activeV
       setShowNewProjectModal(false)
     } catch (err) {
       console.error('Error creating project:', err)
-      alert('Proje oluşturulamadı')
+      alert('Failed to create project')
     } finally {
       setIsCreating(false)
     }
   }
 
   const getProjectColor = (index: number) => PROJECT_COLORS[index % PROJECT_COLORS.length]
+
+  const deleteProject = async (projectId: string) => {
+    if (!confirm('Delete this project?')) return
+    
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: 'DELETE',
+      })
+      
+      if (!res.ok) throw new Error('Failed to delete project')
+      
+      setProjects(projects.filter(p => p.id !== projectId))
+      
+      // If deleted project was active, switch to default
+      if (activeProject === projectId) {
+        const remaining = projects.filter(p => p.id !== projectId)
+        if (remaining.length > 0) {
+          setActiveProject(remaining[0].id)
+        } else {
+          setActiveProject('00000000-0000-0000-0000-000000000001')
+        }
+      }
+    } catch (err) {
+      console.error('Error deleting project:', err)
+      alert('Failed to delete project')
+    }
+  }
 
   return (
     <aside className="panel sidebar" style={{ borderRight: '1px solid var(--glass-border)' }}>
@@ -164,17 +191,6 @@ export default function Sidebar({ activeProject, setActiveProject, user, activeV
               <polyline points="14 2 14 8 20 8"/>
             </svg>
             Files
-          </div>
-          <div 
-            className={`nav-item ${activeView === 'milestones' ? 'active' : ''}`}
-            onClick={() => setActiveView('milestones')}
-          >
-            <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M12 20V10"/>
-              <path d="M18 20V4"/>
-              <path d="M6 20v-4"/>
-            </svg>
-            Milestones
           </div>
           <div 
             className={`nav-item ${activeView === 'agents' ? 'active' : ''}`}
@@ -247,10 +263,10 @@ export default function Sidebar({ activeProject, setActiveProject, user, activeV
         {/* Projects */}
         <div style={{ padding: '12px 14px' }}>
           <div style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: '8px', padding: '0 8px' }}>
-            Projeler
+            Projects
           </div>
           {isLoading ? (
-            <div style={{ padding: '8px', fontSize: '12px', color: 'var(--text-tertiary)' }}>Yükleniyor...</div>
+            <div style={{ padding: '8px', fontSize: '12px', color: 'var(--text-tertiary)' }}>Loading...</div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
               {projects.map((project, index) => (
@@ -264,6 +280,19 @@ export default function Sidebar({ activeProject, setActiveProject, user, activeV
                 >
                   <div className="project-dot" style={{ background: getProjectColor(index) }}></div>
                   <span className="project-item-name">{project.name}</span>
+                  <button
+                    className="project-delete-btn"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      deleteProject(project.id)
+                    }}
+                    title="Delete project"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <line x1="18" y1="6" x2="6" y2="18"/>
+                      <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                  </button>
                 </div>
               ))}
             </div>
@@ -277,7 +306,7 @@ export default function Sidebar({ activeProject, setActiveProject, user, activeV
               <line x1="12" y1="5" x2="12" y2="19"/>
               <line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
-            Yeni Proje
+            New Project
           </button>
         </div>
 
@@ -286,7 +315,7 @@ export default function Sidebar({ activeProject, setActiveProject, user, activeV
           <div className="modal-overlay" onClick={() => setShowNewProjectModal(false)}>
             <div className="modal-content" onClick={(e) => e.stopPropagation()}>
               <div className="modal-header">
-                <h3>Yeni Proje</h3>
+                <h3>New Project</h3>
                 <button className="modal-close" onClick={() => setShowNewProjectModal(false)}>×</button>
               </div>
               <div className="modal-body">
@@ -294,7 +323,7 @@ export default function Sidebar({ activeProject, setActiveProject, user, activeV
                   type="text"
                   value={newProjectName}
                   onChange={(e) => setNewProjectName(e.target.value)}
-                  placeholder="Proje adı..."
+                  placeholder="Project name..."
                   className="modal-input"
                   autoFocus
                   onKeyDown={(e) => e.key === 'Enter' && createProject()}
@@ -306,14 +335,14 @@ export default function Sidebar({ activeProject, setActiveProject, user, activeV
                   onClick={() => setShowNewProjectModal(false)}
                   disabled={isCreating}
                 >
-                  İptal
+                  Cancel
                 </button>
                 <button 
                   className="modal-btn primary" 
                   onClick={createProject}
                   disabled={!newProjectName.trim() || isCreating}
                 >
-                  {isCreating ? 'Oluşturuluyor...' : 'Oluştur'}
+                  {isCreating ? 'Creating...' : 'Create'}
                 </button>
               </div>
             </div>
@@ -469,8 +498,23 @@ export default function Sidebar({ activeProject, setActiveProject, user, activeV
         .project-item:hover { background: rgba(255,255,255,0.04); }
         .project-item.active { background: rgba(0,212,255,0.08); }
         .project-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-        .project-item-name { font-size: 13px; color: var(--text-secondary); }
+        .project-item-name { font-size: 13px; color: var(--text-secondary); flex: 1; }
         .project-item.active .project-item-name { color: var(--text-primary); }
+        .project-delete-btn {
+          opacity: 0;
+          background: none;
+          border: none;
+          color: var(--text-tertiary);
+          cursor: pointer;
+          padding: 4px;
+          border-radius: 4px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.15s ease;
+        }
+        .project-item:hover .project-delete-btn { opacity: 1; }
+        .project-delete-btn:hover { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
         .new-project-btn {
           display: flex; align-items: center; gap: 8px;
           padding: 8px 12px; border-radius: 8px;

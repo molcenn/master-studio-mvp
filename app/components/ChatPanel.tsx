@@ -8,7 +8,7 @@ function escapeHtml(text: string): string {
 }
 
 function renderMarkdown(text: string): string {
-  // Check for review request format: REVIEW TALEBİ | Title\n\n```diff\n...
+  // First, try to match explicit review request format
   const reviewMatch = text.match(/REVIEW TALEBİ \| (.+?)\n\n```diff\n([\s\S]*?)```/)
   if (reviewMatch) {
     const title = reviewMatch[1]
@@ -16,7 +16,6 @@ function renderMarkdown(text: string): string {
     const id = 'review-' + Math.random().toString(36).substr(2, 9)
     const codePreview = diffCode.trim().substring(0, 30).replace(/'/g, "\\'")
     
-    // Parse diff lines with color coding
     const lines = diffCode.trim().split('\n')
     const diffLines = lines.map(line => {
       const escaped = escapeHtml(line)
@@ -40,29 +39,56 @@ function renderMarkdown(text: string): string {
           ${diffLines}
         </div>
         <div class="review-request-actions">
-          <button class="review-approve-btn" id="approve-${id}" onclick="
-            this.textContent='✓ Onaylandı';
-            this.disabled=true;
-            this.style.opacity='0.5';
-            var actions = JSON.parse(localStorage.getItem('review-actions')||'[]');
-            actions.push({id:'${id}',action:'approved',code:'${codePreview}',timestamp:Date.now()});
-            localStorage.setItem('review-actions',JSON.stringify(actions));
-            window.dispatchEvent(new Event('review-action'));
-          ">✓ Approve</button>
-          <button class="review-reject-btn" id="fix-${id}" onclick="
-            this.textContent='✎ Düzeltme İstendi';
-            this.disabled=true;
-            this.style.opacity='0.5';
-            var actions = JSON.parse(localStorage.getItem('review-actions')||'[]');
-            actions.push({id:'${id}',action:'rejected',code:'${codePreview}',timestamp:Date.now()});
-            localStorage.setItem('review-actions',JSON.stringify(actions));
-            window.dispatchEvent(new Event('review-action'));
-          ">✎ Request Fix</button>
+          <button class="review-approve-btn" id="approve-${id}">✓ Approve</button>
+          <button class="review-reject-btn" id="fix-${id}">✎ Request Fix</button>
         </div>
       </div>`
   }
   
+  // If no explicit review format, process normally but handle diff blocks specially
   return text
+    // Diff blocks: ```diff → review card
+    .replace(/```diff\n([\s\S]*?)```/g, (_, diffCode) => {
+      const id = 'review-' + Math.random().toString(36).substr(2, 9)
+      const codePreview = diffCode.trim().substring(0, 30).replace(/'/g, "\\'")
+      
+      // Parse diff lines with color coding
+      const lines = diffCode.trim().split('\n')
+      const diffLines = lines.map(line => {
+        const escaped = escapeHtml(line)
+        if (line.startsWith('-')) {
+          return `<div class="diff-line diff-removed"><span class="diff-marker">-</span><span class="diff-content">${escaped.substring(1)}</span></div>`
+        } else if (line.startsWith('+')) {
+          return `<div class="diff-line diff-added"><span class="diff-marker">+</span><span class="diff-content">${escaped.substring(1)}</span></div>`
+        } else if (line.startsWith('@@')) {
+          return `<div class="diff-line diff-hunk"><span class="diff-content">${escaped}</span></div>`
+        } else {
+          return `<div class="diff-line"><span class="diff-marker"> </span><span class="diff-content">${escaped}</span></div>`
+        }
+      }).join('')
+      
+      return `<div class="review-request-card">
+          <div class="review-request-header">
+            <div class="review-request-badge">CODE REVIEW</div>
+            <div class="review-request-title">Diff</div>
+          </div>
+          <div class="diff-view-container">
+            ${diffLines}
+          </div>
+          <div class="review-request-actions">
+            <button class="review-approve-btn" id="approve-${id}" onclick="
+              this.textContent='✓ Onaylandı';
+              this.disabled=true;
+              this.style.opacity='0.5';
+            ">✓ Approve</button>
+            <button class="review-reject-btn" id="fix-${id}" onclick="
+              this.textContent='✎ Düzeltme İstendi';
+              this.disabled=true;
+              this.style.opacity='0.5';
+            ">✎ Request Fix</button>
+          </div>
+        </div>`
+    })
     // Code blocks: ```lang\ncode\n``` → scrollable code card window
     .replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
       const lines = code.trim().split('\n')

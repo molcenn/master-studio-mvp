@@ -75,9 +75,9 @@ function renderMarkdown(text: string, role: string = 'agent'): string {
     })
     // Code blocks: ```lang\ncode\n``` → different rendering based on role
     .replace(/```(?!diff)(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
-      // User messages: simple pre/code block, no card
+      // User messages: no code card at all, just show as plain text
       if (role === 'user') {
-        return `<pre class="chat-code-content" style="margin:6px 0;padding:10px 12px;background:rgba(0,0,0,0.3);border-radius:8px;overflow-x:auto;"><code>${escapeHtml(code.trim())}</code></pre>`
+        return `<span style="font-family:monospace;font-size:12px;opacity:0.85">${escapeHtml(code.trim())}</span>`
       }
       // Agent messages: styled code card
       const lines = code.trim().split('\n')

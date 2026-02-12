@@ -95,10 +95,18 @@ const MODEL_BADGE_COLORS: Record<string, { bg: string; text: string }> = {
   'gpt-4o': { bg: 'rgba(34,197,94,0.15)', text: '#22c55e' },
 }
 
+interface AgentMessage {
+  id: string
+  role: 'user' | 'agent'
+  content: string
+  created_at: string
+  model?: string
+}
+
 export default function ChatPanel({ projectId = '00000000-0000-0000-0000-000000000001', onHtmlDetected }: ChatPanelProps) {
   const [activeTab, setActiveTab] = useState<'chat' | 'swarm'>('chat')
   const [selectedModel, setSelectedModel] = useState('kimi')
-  const { messages, streamingContent, sendMessage, uploadFile, stopGeneration, isLoading } = useChat({ projectId, model: selectedModel })
+  const { messages: projectMessages, streamingContent: projectStreaming, sendMessage: sendProjectMessage, uploadFile, stopGeneration: stopProjectGeneration, isLoading: isProjectLoading } = useChat({ projectId, model: selectedModel })
   const [input, setInput] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -111,7 +119,13 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
   const [newAgentModel, setNewAgentModel] = useState('kimi')
   const [newAgentDesc, setNewAgentDesc] = useState('')
 
-  // Load agents from localStorage on mount
+  // Agent-specific chat states
+  const [agentMessages, setAgentMessages] = useState<Record<string, AgentMessage[]>>({})
+  const [agentStreamingContent, setAgentStreamingContent] = useState('')
+  const [isAgentLoading, setIsAgentLoading] = useState(false)
+  const abortControllerRef = useRef<AbortController | null>(null)
+
+  // Load agents and agent messages from localStorage on mount
   useEffect(() => {
     const saved = localStorage.getItem('master-studio-agents')
     if (saved) {
@@ -122,12 +136,158 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
         console.error('Failed to parse agents:', e)
       }
     }
+    const savedMessages = localStorage.getItem('master-studio-agent-messages')
+    if (savedMessages) {
+      try {
+        const parsed = JSON.parse(savedMessages)
+        setAgentMessages(parsed)
+      } catch (e) {
+        console.error('Failed to parse agent messages:', e)
+      }
+    }
   }, [])
 
   // Save agents to localStorage when changed
   useEffect(() => {
     localStorage.setItem('master-studio-agents', JSON.stringify(agents))
   }, [agents])
+
+  // Save agent messages to localStorage when changed
+  useEffect(() => {
+    localStorage.setItem('master-studio-agent-messages', JSON.stringify(agentMessages))
+  }, [agentMessages])
+
+  // Get current messages based on active context
+  const getCurrentMessages = (): AgentMessage[] => {
+    if (activeAgentId === 'main') {
+      // Convert project messages to AgentMessage format
+      return projectMessages.map(m => ({
+        id: m.id,
+        role: m.role === 'assistant' ? 'agent' : m.role,
+        content: m.content,
+        created_at: m.created_at,
+        model: selectedModel
+      }))
+    }
+    return agentMessages[activeAgentId] || []
+  }
+
+  const getCurrentStreaming = (): string => {
+    if (activeAgentId === 'main') return projectStreaming
+    return agentStreamingContent
+  }
+
+  const getCurrentLoading = (): boolean => {
+    if (activeAgentId === 'main') return isProjectLoading
+    return isAgentLoading
+  }
+
+  // Send message to specific agent
+  const sendAgentMessage = async (content: string) => {
+    if (!content.trim() || activeAgentId === 'main') return
+
+    const agent = agents.find(a => a.id === activeAgentId)
+    if (!agent) return
+
+    const userMsg: AgentMessage = {
+      id: 'user-' + Date.now(),
+      role: 'user',
+      content: content.trim(),
+      created_at: new Date().toISOString(),
+    }
+
+    // Add user message
+    setAgentMessages(prev => ({
+      ...prev,
+      [activeAgentId]: [...(prev[activeAgentId] || []), userMsg]
+    }))
+
+    setIsAgentLoading(true)
+    setAgentStreamingContent('')
+    abortControllerRef.current = new AbortController()
+
+    try {
+      const context = (agentMessages[activeAgentId] || []).slice(-10)
+      
+      const res = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: 'agent-' + activeAgentId,
+          message: content.trim(),
+          context: context.map(m => ({ role: m.role === 'agent' ? 'assistant' : m.role, content: m.content })),
+          stream: true,
+          model: agent.model,
+        }),
+        signal: abortControllerRef.current.signal,
+      })
+
+      if (!res.ok) throw new Error('Failed to send message')
+
+      const reader = res.body?.getReader()
+      if (!reader) throw new Error('No response body')
+
+      const decoder = new TextDecoder()
+      let fullContent = ''
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value)
+        const events = buffer.split('\n\n')
+        buffer = events.pop() || ''
+
+        for (const event of events) {
+          const lines = event.split('\n')
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6)
+              try {
+                const parsed = JSON.parse(data)
+                if (parsed.type === 'chunk') {
+                  fullContent += parsed.content
+                  setAgentStreamingContent(fullContent)
+                } else if (parsed.type === 'done') {
+                  const aiMsg: AgentMessage = {
+                    id: 'agent-' + Date.now(),
+                    role: 'agent',
+                    content: fullContent,
+                    created_at: new Date().toISOString(),
+                    model: agent.model,
+                  }
+                  setAgentMessages(prev => ({
+                    ...prev,
+                    [activeAgentId]: [...(prev[activeAgentId] || []), aiMsg]
+                  }))
+                  setAgentStreamingContent('')
+                }
+              } catch (e) {
+                // Ignore parse errors
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name !== 'AbortError') {
+        console.error('Agent chat error:', err)
+      }
+    } finally {
+      setIsAgentLoading(false)
+      setAgentStreamingContent('')
+      abortControllerRef.current = null
+    }
+  }
+
+  const stopAgentGeneration = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+      setIsAgentLoading(false)
+    }
+  }
 
   const handleCreateAgent = () => {
     if (!newAgentName.trim()) return
@@ -147,8 +307,27 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
 
   const handleDeleteAgent = (id: string) => {
     setAgents(agents.filter(a => a.id !== id))
+    // Also delete agent's messages
+    setAgentMessages(prev => {
+      const updated = { ...prev }
+      delete updated[id]
+      return updated
+    })
     if (activeAgentId === id) {
       setActiveAgentId('main')
+      setActiveTab('chat')
+    }
+  }
+
+  const handleAgentClick = (agentId: string) => {
+    setActiveAgentId(agentId)
+    setActiveTab('chat')
+    // Set model to agent's model
+    if (agentId !== 'main') {
+      const agent = agents.find(a => a.id === agentId)
+      if (agent) {
+        setSelectedModel(agent.model)
+      }
     }
   }
 
@@ -161,24 +340,34 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
   }
 
   // Auto-scroll to bottom when messages or streaming content changes
+  const currentMessages = getCurrentMessages()
+  const currentStreaming = getCurrentStreaming()
+  const currentLoading = getCurrentLoading()
+  
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, streamingContent])
+  }, [currentMessages, currentStreaming])
 
   // Auto-detect HTML in agent messages and notify parent
   useEffect(() => {
-    if (!onHtmlDetected || messages.length === 0) return
-    const lastMsg = messages[messages.length - 1]
+    if (!onHtmlDetected || currentMessages.length === 0) return
+    const lastMsg = currentMessages[currentMessages.length - 1]
     if (lastMsg.role !== 'user' && /```html/i.test(lastMsg.content)) {
       onHtmlDetected()
     }
-  }, [messages, onHtmlDetected])
+  }, [currentMessages, onHtmlDetected])
 
   const handleSend = async () => {
     if (!input.trim()) return
 
     const msg = input.trim()
     setInput('') // Clear immediately for better UX
+
+    // If in agent chat mode (not main), send to agent
+    if (activeAgentId !== 'main') {
+      await sendAgentMessage(msg)
+      return
+    }
 
     // Model command sync
     if (msg.startsWith('/model ')) {
@@ -191,7 +380,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
     // Spawn command
     if (msg.startsWith('/spawn ')) {
       const task = msg.substring(7)
-      await sendMessage(msg)
+      await sendProjectMessage(msg)
 
       // Send to spawn API in background
       try {
@@ -214,7 +403,15 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
       return
     }
 
-    await sendMessage(msg)
+    await sendProjectMessage(msg)
+  }
+
+  const handleStop = () => {
+    if (activeAgentId === 'main') {
+      stopProjectGeneration()
+    } else {
+      stopAgentGeneration()
+    }
   }
 
   const handleFileClick = () => {
@@ -256,22 +453,34 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
         <>
           {/* Messages */}
           <div className="chat-messages">
-            {messages.length === 0 ? (
+            {currentMessages.length === 0 ? (
               <div className="message system">
                 <div className="message-header">
-                  <span className="message-agent-name">Betsy</span>
-                  <span className="message-model">{MODEL_DISPLAY_NAMES[selectedModel]}</span>
+                  <span className="message-agent-name">
+                    {activeAgentId === 'main' ? 'Betsy' : agents.find(a => a.id === activeAgentId)?.name || 'Agent'}
+                  </span>
+                  <span className="message-model">
+                    {activeAgentId === 'main' 
+                      ? MODEL_DISPLAY_NAMES[selectedModel] 
+                      : MODEL_DISPLAY_NAMES[agents.find(a => a.id === activeAgentId)?.model || 'kimi']}
+                  </span>
                   <span className="message-time">now</span>
                 </div>
-                Hello! How can I help you with your project today? ✦
+                {activeAgentId === 'main' 
+                  ? "Hello! How can I help you with your project today? ✦"
+                  : `I'm ${agents.find(a => a.id === activeAgentId)?.name || 'your agent'}. How can I assist you? ✦`}
               </div>
             ) : (
-              messages.map((msg: any) => (
+              currentMessages.map((msg: any) => (
                 <div key={msg.id} className={`message ${msg.role}`}>
-                  {msg.role === 'agent' && (
+                  {(msg.role === 'agent' || msg.role === 'assistant') && (
                     <div className="message-header">
-                      <span className="message-agent-name">Betsy</span>
-                      <span className="message-model">{MODEL_DISPLAY_NAMES[selectedModel]}</span>
+                      <span className="message-agent-name">
+                        {activeAgentId === 'main' ? 'Betsy' : agents.find(a => a.id === activeAgentId)?.name || 'Agent'}
+                      </span>
+                      <span className="message-model">
+                        {MODEL_DISPLAY_NAMES[msg.model || selectedModel] || MODEL_DISPLAY_NAMES[selectedModel]}
+                      </span>
                       <span className="message-time">
                         {new Date(msg.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                       </span>
@@ -310,18 +519,24 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
               ))
             )}
             
-            {streamingContent && (
+            {currentStreaming && (
               <div className="message agent">
                 <div className="message-header">
-                  <span className="message-agent-name">Betsy</span>
-                  <span className="message-model">{MODEL_DISPLAY_NAMES[selectedModel]}</span>
+                  <span className="message-agent-name">
+                    {activeAgentId === 'main' ? 'Betsy' : agents.find(a => a.id === activeAgentId)?.name || 'Agent'}
+                  </span>
+                  <span className="message-model">
+                    {activeAgentId === 'main' 
+                      ? MODEL_DISPLAY_NAMES[selectedModel] 
+                      : MODEL_DISPLAY_NAMES[agents.find(a => a.id === activeAgentId)?.model || 'kimi']}
+                  </span>
                   <span className="message-time">now</span>
                 </div>
-                <div dangerouslySetInnerHTML={{ __html: renderMarkdown(streamingContent) }} />
+                <div dangerouslySetInnerHTML={{ __html: renderMarkdown(currentStreaming) }} />
               </div>
             )}
             
-            {isLoading && !streamingContent && (
+            {currentLoading && !currentStreaming && (
               <div className="thinking-indicator">
                 <div className="thinking-dots">
                   <div className="thinking-dot"></div>
@@ -336,10 +551,12 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
 
           {/* Chat Input */}
           <div className="chat-input-header">
-            <span className="model-badge-simple">Betsy</span>
+            <span className="model-badge-simple">
+              {activeAgentId === 'main' ? 'Betsy' : agents.find(a => a.id === activeAgentId)?.name || 'Agent'}
+            </span>
           </div>
           <div className="chat-input-area" style={{ position: 'relative' }}>
-            {input.startsWith('/') && (
+            {activeAgentId === 'main' && input.startsWith('/') && (
               <div style={{
                 position: 'absolute',
                 bottom: '100%',
@@ -389,14 +606,14 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
-                placeholder="Type a message... (/model, /spawn)"
+                placeholder={activeAgentId === 'main' ? "Type a message... (/model, /spawn)" : `Message ${agents.find(a => a.id === activeAgentId)?.name || 'agent'}...`}
                 className="chat-input"
                 rows={2}
-                disabled={isLoading}
+                disabled={currentLoading}
               />
-              {isLoading ? (
+              {currentLoading ? (
                 <button 
-                  onClick={stopGeneration}
+                  onClick={handleStop}
                   className="stop-btn"
                   title="Stop"
                 >
@@ -424,7 +641,9 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
                 onChange={(e) => {
                   const newModel = e.target.value
                   setSelectedModel(newModel)
-                  sendMessage('/model ' + newModel)
+                  if (activeAgentId === 'main') {
+                    sendProjectMessage('/model ' + newModel)
+                  }
                 }}
                 style={{ 
                   height: '24px', 
@@ -449,12 +668,12 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
       ) : (
         /* Agents Tab Content */
         <div className="agents-content">
-          <div className="agents-section-title">Agents</div>
+          <div className="agents-section-title">Click agent to chat</div>
           
           {/* Main Agent (Betsy) - Always first, cannot be deleted */}
           <div 
             className={`agent-item ${activeAgentId === 'main' ? 'active' : ''}`}
-            onClick={() => setActiveAgentId('main')}
+            onClick={() => handleAgentClick('main')}
           >
             <div className="agent-avatar">B</div>
             <div className="agent-info">
@@ -469,7 +688,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
             <div 
               key={agent.id}
               className={`agent-item ${activeAgentId === agent.id ? 'active' : ''}`}
-              onClick={() => setActiveAgentId(agent.id)}
+              onClick={() => handleAgentClick(agent.id)}
             >
               <div className="agent-avatar">{getAgentInitials(agent.name)}</div>
               <div className="agent-info">
@@ -553,7 +772,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
         </div>
       )}
 
-      <style jsx>{`
+      <style jsx global>{`
         .panel {
           background: var(--glass-bg);
           backdrop-filter: var(--glass-blur);

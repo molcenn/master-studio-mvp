@@ -81,7 +81,7 @@ export async function PATCH(
   }
 }
 
-// DELETE /api/projects/[id] - Delete project
+// DELETE /api/projects/[id] - Delete project (with cascade)
 export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -98,6 +98,18 @@ export async function DELETE(
   }
 
   try {
+    // First delete related messages (cascade delete)
+    const { error: messagesError } = await supabase
+      .from('messages')
+      .delete()
+      .eq('project_id', id)
+    
+    if (messagesError) {
+      console.error('Error deleting messages:', messagesError)
+      // Continue anyway, project might not have messages
+    }
+
+    // Then delete the project
     const { error } = await supabase
       .from('projects')
       .delete()

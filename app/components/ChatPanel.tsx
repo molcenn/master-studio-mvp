@@ -82,12 +82,15 @@ function renderMarkdown(text: string): string {
       const codePreview = code.trim().substring(0, 30).replace(/'/g, "\\'")
       return `<div class="chat-code-card">
         <div class="chat-code-card-header">
-          <span class="chat-code-lang">${lang || 'code'}</span>
           <span class="chat-code-lines">${lineCount} lines</span>
           <button class="chat-code-copy" onclick="navigator.clipboard.writeText(document.getElementById('${id}').textContent);this.textContent='✓ Copied';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
         </div>
         <div class="chat-code-scroll">
           <pre class="chat-code-content" id="${id}"><code>${fullCode}</code></pre>
+        </div>
+        <div class="code-card-actions">
+          <button class="code-card-approve" onclick="this.textContent='✓ Approved';this.style.opacity='0.6';this.disabled=true">Approve</button>
+          <button class="code-card-reject" onclick="this.textContent='✗ Rejected';this.style.opacity='0.6';this.disabled=true">Reject</button>
         </div>
       </div>`
     })
@@ -1171,30 +1174,32 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
           border-top: 1px solid rgba(255,255,255,0.06);
           background: rgba(0,0,0,0.2);
         }
-        .code-approve-btn {
+        .code-card-approve {
           flex: 1;
-          padding: 5px 10px;
+          padding: 6px 12px;
           border: 1px solid rgba(74,222,128,0.3);
           background: rgba(74,222,128,0.1);
           color: #4ade80;
           border-radius: 6px;
-          font-size: 11px;
+          font-size: 12px;
+          font-weight: 600;
           cursor: pointer;
           transition: all 0.15s;
         }
-        .code-approve-btn:hover { background: rgba(74,222,128,0.2); }
-        .code-fix-btn {
+        .code-card-approve:hover { background: rgba(74,222,128,0.25); }
+        .code-card-reject {
           flex: 1;
-          padding: 5px 10px;
-          border: 1px solid rgba(251,191,36,0.3);
-          background: rgba(251,191,36,0.1);
-          color: #fbbf24;
+          padding: 6px 12px;
+          border: 1px solid rgba(239,68,68,0.3);
+          background: rgba(239,68,68,0.1);
+          color: #ef4444;
           border-radius: 6px;
-          font-size: 11px;
+          font-size: 12px;
+          font-weight: 600;
           cursor: pointer;
           transition: all 0.15s;
         }
-        .code-fix-btn:hover { background: rgba(251,191,36,0.2); }
+        .code-card-reject:hover { background: rgba(239,68,68,0.25); }
         .chat-code-content {
           margin: 0;
           padding: 12px;

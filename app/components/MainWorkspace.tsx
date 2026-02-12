@@ -38,9 +38,9 @@ interface Review {
   diff: string | null
 }
 
-type ViewType = 'dashboard' | 'workspace' | 'files' | 'reviews'
+type ViewType = 'dashboard' | 'workspace' | 'files' | 'calendar'
 type ReviewFilter = 'all' | 'pending' | 'approved' | 'rejected'
-type IdeTabType = 'code' | 'preview' | 'details' | 'milestones'
+type IdeTabType = 'code' | 'preview' | 'milestones'
 
 interface Milestone {
   id: string
@@ -200,7 +200,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
 
   // Auto-refresh code blocks every 5s in workspace
   useEffect(() => {
-    if (activeView !== 'workspace' || ideTab === 'details') return
+    if (activeView !== 'workspace') return
     const iv = setInterval(fetchCodeBlocks, 5000)
     return () => clearInterval(iv)
   }, [activeView, ideTab, activeProject])
@@ -229,12 +229,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
     }
   }, [activeView, activeProject])
 
-  // Fetch reviews when viewing reviews tab
-  useEffect(() => {
-    if (activeView === 'reviews') {
-      fetchReviews()
-    }
-  }, [activeView, reviewFilter])
+  // Reviews removed
 
   const fetchData = async () => {
     try {
@@ -625,7 +620,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
     dashboard: displayProject ? displayProject.name : 'Dashboard',
     workspace: 'Workspace',
     files: displayProject ? `${displayProject.name} — Files` : 'Files',
-    reviews: 'Reviews'
+    calendar: 'Calendar'
   }
 
   // Empty state component
@@ -811,12 +806,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                     </svg>
                     Preview
                   </button>
-                  <button className={`ide-tab ${ideTab === 'details' ? 'active' : ''}`} onClick={() => setIdeTab('details')}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06"/>
-                    </svg>
-                    Details
-                  </button>
+                  {/* Details tab removed */}
                   <button className={`ide-tab ${ideTab === 'milestones' ? 'active' : ''}`} onClick={() => setIdeTab('milestones')}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/>
@@ -919,94 +909,6 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                     </div>
                   )
                 })()}
-
-                {/* DETAILS TAB */}
-                {ideTab === 'details' && (
-                  <div className="workspace-detail" style={{ padding: '20px', overflow: 'auto' }}>
-                    <div className="workspace-header">
-                      {isEditingName ? (
-                        <div className="name-edit">
-                          <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === 'Enter') updateProjectName(); if (e.key === 'Escape') { setIsEditingName(false); setEditName(activeProjectData?.name || '') } }}
-                            onBlur={() => { if (editName.trim() !== activeProjectData?.name) updateProjectName(); else setIsEditingName(false) }}
-                            autoFocus className="name-input" />
-                          {isSaving && <span className="saving-indicator">Saving...</span>}
-                        </div>
-                      ) : (
-                        <h1 className="project-title" onClick={() => { setEditName(activeProjectData?.name || ''); setIsEditingName(true) }} title="Click to edit">
-                          {activeProjectData?.name || 'Loading...'}
-                          <svg className="edit-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                          </svg>
-                        </h1>
-                      )}
-                      <div className="project-meta">
-                        <span className="meta-item">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                          {activeProjectData?.created_at ? new Date(activeProjectData.created_at).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : '-'}
-                        </span>
-                        <span className="meta-item">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                          {activeProjectData?.messages?.[0]?.count || 0} messages
-                        </span>
-                      </div>
-                    </div>
-                    <div className="quick-actions">
-                      <button className="action-btn primary" onClick={() => setActiveView('dashboard')}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                        Go to Chat
-                      </button>
-                      <button className="action-btn secondary" onClick={() => setActiveView('files')}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
-                        Files
-                      </button>
-                      <button className="action-btn danger" onClick={() => setShowDeleteModal(true)}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                        Delete Project
-                      </button>
-                    </div>
-                    <div className="messages-section">
-                      <h3 className="section-heading">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                        Recent Messages
-                      </h3>
-                      {recentMessages.length === 0 ? (
-                        <div className="no-messages">No messages yet</div>
-                      ) : (
-                        <div className="messages-list">
-                          {recentMessages.map((msg) => (
-                            <div key={msg.id} className={`message-item ${msg.role}`}>
-                              <div className="message-avatar">{msg.role === 'user' ? 'U' : 'AI'}</div>
-                              <div className="message-content">
-                                <div className="message-header">
-                                  <span className="message-role">{msg.role === 'user' ? 'User' : 'AI'}</span>
-                                  <span className="message-time">{timeAgo(msg.created_at)}</span>
-                                </div>
-                                <p className="message-text">{msg.content.length > 120 ? msg.content.slice(0, 120) + '...' : msg.content}</p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Delete Confirmation Modal */}
-                {showDeleteModal && (
-                  <div className="modal-overlay" onClick={() => setShowDeleteModal(false)}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                      <h3 className="modal-title">Delete Project</h3>
-                      <p className="modal-desc">
-                        Are you sure you want to delete <strong>"{activeProjectData?.name}"</strong>?<br />This action cannot be undone.
-                      </p>
-                      <div className="modal-actions">
-                        <button className="modal-btn secondary" onClick={() => setShowDeleteModal(false)} disabled={isDeleting}>Cancel</button>
-                        <button className="modal-btn danger" onClick={deleteProject} disabled={isDeleting}>{isDeleting ? 'Deleting...' : 'Yes, Delete'}</button>
-                      </div>
-                    </div>
-                  </div>
-                )}
 
                 {/* MILESTONES TAB */}
                 {ideTab === 'milestones' && (
@@ -1458,145 +1360,18 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
           </div>
         )}
 
-        {activeView === 'reviews' && (
-          <div className="reviews-container">
-            {/* Reviews Header */}
-            <div className="reviews-header">
-              <div className="reviews-title">
-                {reviewsLoading ? (
-                  <span className="reviews-loading">Loading...</span>
-                ) : (
-                  <>
-                    <span>{reviews.filter(r => r.status === 'pending').length} pending reviews</span>
-                    <span className="reviews-subtitle">
-                      {reviews.filter(r => r.status === 'approved').length} approved · {reviews.filter(r => r.status === 'rejected').length} needs fix
-                    </span>
-                  </>
-                )}
-              </div>
-              {/* Filter Buttons */}
-              <div className="reviews-filter">
-                {(['all', 'pending', 'approved', 'rejected'] as ReviewFilter[]).map((filter) => (
-                  <button
-                    key={filter}
-                    className={`filter-btn ${reviewFilter === filter ? 'active' : ''}`}
-                    onClick={() => setReviewFilter(filter)}
-                  >
-                    {filter === 'all' && 'All'}
-                    {filter === 'pending' && 'Pending'}
-                    {filter === 'approved' && 'Approved'}
-                    {filter === 'rejected' && 'Needs Fix'}
-                  </button>
-                ))}
-              </div>
+        {activeView === 'calendar' && (
+          <div style={{ flex: 1, padding: '20px', overflow: 'auto' }}>
+            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-tertiary)' }}>
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ margin: '0 auto 16px', display: 'block' }}>
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                <line x1="16" y1="2" x2="16" y2="6"/>
+                <line x1="8" y1="2" x2="8" y2="6"/>
+                <line x1="3" y1="10" x2="21" y2="10"/>
+              </svg>
+              <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px' }}>Calendar & Planning</div>
+              <div style={{ fontSize: '13px' }}>Coming soon...</div>
             </div>
-
-            {/* Reviews List */}
-            {reviewsLoading ? (
-              <div className="reviews-loading-state">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="spin">
-                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-                </svg>
-                Loading reviews...
-              </div>
-            ) : reviews.length === 0 ? (
-              <EmptyState 
-                icon={<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-green)" strokeWidth="1.5">
-                  <path d="M9 11l3 3L22 4"/>
-                  <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-                </svg>}
-                title={reviewFilter === 'all' ? "No pending reviews" : "No reviews match this filter"}
-                description={reviewFilter === 'all' ? "All reviews completed" : "Try a different filter"}
-              />
-            ) : (
-              <div className="reviews-list">
-                {reviews.map((review) => {
-                  const statusInfo = getStatusBadgeInfo(review.status)
-                  const typeInfo = getTypeBadgeInfo(review.type)
-                  return (
-                    <div key={review.id} className={`review-card ${review.status}`}>
-                      <div className="review-card-header">
-                        <div className="review-card-titles">
-                          <div className="review-card-title-row">
-                            <h3 className="review-card-title">{review.title}</h3>
-                            <span className={`type-badge ${typeInfo.className}`}>{typeInfo.text}</span>
-                            <span className={`status-badge ${statusInfo.className}`}>{statusInfo.text}</span>
-                          </div>
-                          <p className="review-card-description">{review.description}</p>
-                          <div className="review-card-meta">
-                            <span className="meta-agent">
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                                <circle cx="12" cy="7" r="4"/>
-                              </svg>
-                              {review.agent}
-                            </span>
-                            <span className="meta-project">
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                              </svg>
-                              {review.project}
-                            </span>
-                            <span className="meta-time">{timeAgo(review.created_at)}</span>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {/* Diff Display */}
-                      {review.diff && (
-                        <div className="review-diff">
-                          <div className="diff-header">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <polyline points="16 18 22 12 16 6"/>
-                              <polyline points="8 6 2 12 8 18"/>
-                            </svg>
-                            Code Changes
-                          </div>
-                          <div className="diff-content">
-                            {parseDiff(review.diff).map((line) => (
-                              <div 
-                                key={line.index} 
-                                className={`diff-line ${line.type === 'removed' ? 'diff-line-removed' : line.type === 'added' ? 'diff-line-added' : 'diff-line-neutral'}`}
-                              >
-                                <span className="diff-line-marker">
-                                  {line.type === 'removed' ? '-' : line.type === 'added' ? '+' : ' '}
-                                </span>
-                                <span className="diff-line-content">{line.content || ' '}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Action Buttons */}
-                      {review.status === 'pending' && (
-                        <div className="review-card-actions">
-                          <button 
-                            className="review-btn approve"
-                            onClick={() => updateReviewStatus(review.id, 'approved')}
-                          >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <polyline points="20 6 9 17 4 12"/>
-                            </svg>
-                            Approve
-                          </button>
-                          <button 
-                            className="review-btn reject"
-                            onClick={() => updateReviewStatus(review.id, 'rejected')}
-                          >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                            </svg>
-                            Fix
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
           </div>
         )}
       </div>

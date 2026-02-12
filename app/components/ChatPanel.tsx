@@ -89,8 +89,8 @@ function renderMarkdown(text: string): string {
           </div>
         </div>`
     })
-    // Code blocks: ```lang\ncode\n``` → scrollable code card window
-    .replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+    // Code blocks: ```lang\ncode\n``` → scrollable code card window (but NOT diff)
+    .replace(/```(?!diff)(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
       const lines = code.trim().split('\n')
       const fullCode = escapeHtml(code.trim())
       const lineCount = lines.length

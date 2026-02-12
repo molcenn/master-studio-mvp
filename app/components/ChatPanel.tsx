@@ -7,7 +7,7 @@ function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-function renderMarkdown(text: string): string {
+function renderMarkdown(text: string, role: string = 'agent'): string {
   // First, try to match explicit review request format
   const reviewMatch = text.match(/REVIEW TALEBİ \| (.+?)\n\n```diff\n([\s\S]*?)```/)
   if (reviewMatch) {
@@ -73,13 +73,24 @@ function renderMarkdown(text: string): string {
           </div>
         </div>`
     })
-    // Code blocks: ```lang\ncode\n``` → scrollable code card window (but NOT diff)
+    // Code blocks: ```lang\ncode\n``` → different rendering based on role
     .replace(/```(?!diff)(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+      // User messages: simple pre/code block, no card
+      if (role === 'user') {
+        return `<pre class="chat-code-content" style="margin:6px 0;padding:10px 12px;background:rgba(0,0,0,0.3);border-radius:8px;overflow-x:auto;"><code>${escapeHtml(code.trim())}</code></pre>`
+      }
+      // Agent messages: styled code card
       const lines = code.trim().split('\n')
       const fullCode = escapeHtml(code.trim())
       const lineCount = lines.length
       const id = 'code-' + Math.random().toString(36).substr(2, 9)
-      const codePreview = code.trim().substring(0, 30).replace(/'/g, "\\'")
+      // Check if this message needs approval (contains approval keywords)
+      const needsApproval = text.includes('onay') || text.includes('Onay') || text.includes('approve') || text.includes('uygula') || text.includes('Uygula') || text.includes('eklensin mi') || text.includes('değiştirilsin mi') || text.includes('yapayım mı') || text.includes('uygun mu')
+      const approvalButtons = needsApproval ? `
+        <div class="code-card-actions">
+          <button class="code-card-approve" onclick="this.textContent='✓ Approved';this.style.opacity='0.6';this.disabled=true">Approve</button>
+          <button class="code-card-reject" onclick="this.textContent='✗ Rejected';this.style.opacity='0.6';this.disabled=true">Reject</button>
+        </div>` : ''
       return `<div class="chat-code-card">
         <div class="chat-code-card-header">
           <span class="chat-code-lines">${lineCount} lines</span>
@@ -88,10 +99,7 @@ function renderMarkdown(text: string): string {
         <div class="chat-code-scroll">
           <pre class="chat-code-content" id="${id}"><code>${fullCode}</code></pre>
         </div>
-        <div class="code-card-actions">
-          <button class="code-card-approve" onclick="this.textContent='✓ Approved';this.style.opacity='0.6';this.disabled=true">Approve</button>
-          <button class="code-card-reject" onclick="this.textContent='✗ Rejected';this.style.opacity='0.6';this.disabled=true">Reject</button>
-        </div>
+        ${approvalButtons}
       </div>`
     })
     // Inline code: `code` → <code>
@@ -533,7 +541,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
                       </span>
                     </div>
                   )}
-                  <div dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }} />
+                  <div dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content, msg.role) }} />
                   
                   {msg.type === 'file' && msg.file_info && (
                     <div className="file-preview-card">

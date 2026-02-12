@@ -8,6 +8,60 @@ function escapeHtml(text: string): string {
 }
 
 function renderMarkdown(text: string): string {
+  // Check for review request format: REVIEW TALEBİ | Title\n\n```diff\n...
+  const reviewMatch = text.match(/REVIEW TALEBİ \| (.+?)\n\n```diff\n([\s\S]*?)```/)
+  if (reviewMatch) {
+    const title = reviewMatch[1]
+    const diffCode = reviewMatch[2]
+    const id = 'review-' + Math.random().toString(36).substr(2, 9)
+    const codePreview = diffCode.trim().substring(0, 30).replace(/'/g, "\\'")
+    
+    // Parse diff lines with color coding
+    const lines = diffCode.trim().split('\n')
+    const diffLines = lines.map(line => {
+      const escaped = escapeHtml(line)
+      if (line.startsWith('-')) {
+        return `<div class="diff-line diff-removed"><span class="diff-marker">-</span><span class="diff-content">${escaped.substring(1)}</span></div>`
+      } else if (line.startsWith('+')) {
+        return `<div class="diff-line diff-added"><span class="diff-marker">+</span><span class="diff-content">${escaped.substring(1)}</span></div>`
+      } else if (line.startsWith('@@')) {
+        return `<div class="diff-line diff-hunk"><span class="diff-content">${escaped}</span></div>`
+      } else {
+        return `<div class="diff-line"><span class="diff-marker"> </span><span class="diff-content">${escaped}</span></div>`
+      }
+    }).join('')
+    
+    return `<div class="review-request-card">
+        <div class="review-request-header">
+          <div class="review-request-badge">REVIEW TALEBİ</div>
+          <div class="review-request-title">${escapeHtml(title)}</div>
+        </div>
+        <div class="diff-view-container">
+          ${diffLines}
+        </div>
+        <div class="review-request-actions">
+          <button class="review-approve-btn" id="approve-${id}" onclick="
+            this.textContent='✓ Onaylandı';
+            this.disabled=true;
+            this.style.opacity='0.5';
+            var actions = JSON.parse(localStorage.getItem('review-actions')||'[]');
+            actions.push({id:'${id}',action:'approved',code:'${codePreview}',timestamp:Date.now()});
+            localStorage.setItem('review-actions',JSON.stringify(actions));
+            window.dispatchEvent(new Event('review-action'));
+          ">✓ Approve</button>
+          <button class="review-reject-btn" id="fix-${id}" onclick="
+            this.textContent='✎ Düzeltme İstendi';
+            this.disabled=true;
+            this.style.opacity='0.5';
+            var actions = JSON.parse(localStorage.getItem('review-actions')||'[]');
+            actions.push({id:'${id}',action:'rejected',code:'${codePreview}',timestamp:Date.now()});
+            localStorage.setItem('review-actions',JSON.stringify(actions));
+            window.dispatchEvent(new Event('review-action'));
+          ">✎ Request Fix</button>
+        </div>
+      </div>`
+  }
+  
   return text
     // Code blocks: ```lang\ncode\n``` → scrollable code card window
     .replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
@@ -1172,6 +1226,125 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
         .chat-heading.h3 { font-size: 13px; font-weight: 600; margin: 4px 0 2px; color: var(--accent-cyan); }
         .chat-list-item, .chat-list-item-num { padding-left: 8px; margin: 2px 0; }
         .chat-paragraph-break { height: 8px; }
+        
+        /* Review Request Card */
+        .review-request-card {
+          background: rgba(10, 10, 20, 0.85);
+          border: 1px solid rgba(255,159,10,0.3);
+          border-radius: 8px;
+          margin: 6px 0;
+          max-width: 95%;
+          overflow: hidden;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        .review-request-header {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 12px;
+          background: rgba(255,159,10,0.08);
+          border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .review-request-badge {
+          font-size: 9px;
+          padding: 3px 8px;
+          background: #ff9f0a;
+          color: #000;
+          border-radius: 4px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        .review-request-title {
+          flex: 1;
+          font-size: 11px;
+          font-weight: 500;
+          color: var(--text-primary);
+        }
+        .diff-view-container {
+          max-height: 300px;
+          overflow-y: auto;
+          overflow-x: hidden;
+        }
+        .diff-line {
+          display: flex;
+          align-items: center;
+          padding: 0;
+          font-family: 'SF Mono', Monaco, Inconsolata, 'Roboto Mono', monospace;
+          font-size: 11px;
+          line-height: 1.6;
+        }
+        .diff-marker {
+          display: inline-block;
+          width: 20px;
+          text-align: center;
+          flex-shrink: 0;
+          user-select: none;
+        }
+        .diff-content {
+          flex: 1;
+          padding: 2px 12px 2px 0;
+          white-space: pre-wrap;
+          word-break: break-word;
+        }
+        .diff-removed {
+          background: rgba(255,59,48,0.08);
+          color: #ff6b6b;
+        }
+        .diff-removed .diff-marker {
+          color: #ff3b30;
+          font-weight: 600;
+        }
+        .diff-added {
+          background: rgba(52,199,89,0.08);
+          color: #69db7c;
+        }
+        .diff-added .diff-marker {
+          color: #34c759;
+          font-weight: 600;
+        }
+        .diff-hunk {
+          background: rgba(100,100,100,0.1);
+          color: var(--text-tertiary);
+          font-size: 10px;
+        }
+        .review-request-actions {
+          display: flex;
+          gap: 8px;
+          padding: 8px 12px;
+          border-top: 1px solid rgba(255,255,255,0.06);
+          background: rgba(0,0,0,0.2);
+        }
+        .review-approve-btn {
+          flex: 1;
+          padding: 6px 12px;
+          border: 1px solid rgba(74,222,128,0.3);
+          background: rgba(74,222,128,0.1);
+          color: #4ade80;
+          border-radius: 6px;
+          font-size: 11px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+        .review-approve-btn:hover {
+          background: rgba(74,222,128,0.2);
+        }
+        .review-reject-btn {
+          flex: 1;
+          padding: 6px 12px;
+          border: 1px solid rgba(251,191,36,0.3);
+          background: rgba(251,191,36,0.1);
+          color: #fbbf24;
+          border-radius: 6px;
+          font-size: 11px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+        .review-reject-btn:hover {
+          background: rgba(251,191,36,0.2);
+        }
       `}</style>
     </aside>
   )

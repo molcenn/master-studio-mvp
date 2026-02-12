@@ -1114,30 +1114,31 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
         }
         .hidden { display: none; }
         .chat-code-card {
-          background: rgba(10, 10, 20, 0.85);
-          border: 1px solid var(--glass-border);
-          border-radius: 8px;
-          margin: 6px 0;
-          max-width: 95%;
+          background: rgba(10, 10, 20, 0.9);
+          border: 1px solid rgba(255,159,10,0.2);
+          border-radius: 10px;
+          margin: 10px 0;
+          max-width: 100%;
           overflow: hidden;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+          box-shadow: 0 2px 12px rgba(0,0,0,0.3);
         }
         .chat-code-card-header {
           display: flex;
           align-items: center;
           gap: 8px;
-          padding: 8px 12px;
-          background: rgba(0,0,0,0.4);
+          padding: 10px 14px;
+          background: rgba(255,159,10,0.06);
           border-bottom: 1px solid rgba(255,255,255,0.06);
         }
         .chat-code-lang {
           font-size: 10px;
-          padding: 2px 8px;
-          background: var(--accent-purple);
-          color: white;
+          padding: 3px 10px;
+          background: #ff9f0a;
+          color: #000;
           border-radius: 4px;
-          font-weight: 600;
+          font-weight: 700;
           text-transform: uppercase;
+          letter-spacing: 0.5px;
         }
         .chat-code-lines {
           font-size: 10px;
@@ -1159,7 +1160,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
           color: var(--text-primary);
         }
         .chat-code-scroll {
-          max-height: 150px;
+          max-height: 300px;
           overflow-y: auto;
           overflow-x: hidden;
         }

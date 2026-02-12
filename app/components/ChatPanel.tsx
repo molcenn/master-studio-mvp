@@ -38,10 +38,6 @@ function renderMarkdown(text: string): string {
         <div class="diff-view-container">
           ${diffLines}
         </div>
-        <div class="review-request-actions">
-          <button class="review-approve-btn" id="approve-${id}">✓ Approve</button>
-          <button class="review-reject-btn" id="fix-${id}">✎ Request Fix</button>
-        </div>
       </div>`
   }
   
@@ -75,18 +71,6 @@ function renderMarkdown(text: string): string {
           <div class="diff-view-container">
             ${diffLines}
           </div>
-          <div class="review-request-actions">
-            <button class="review-approve-btn" id="approve-${id}" onclick="
-              this.textContent='✓ Onaylandı';
-              this.disabled=true;
-              this.style.opacity='0.5';
-            ">✓ Approve</button>
-            <button class="review-reject-btn" id="fix-${id}" onclick="
-              this.textContent='✎ Düzeltme İstendi';
-              this.disabled=true;
-              this.style.opacity='0.5';
-            ">✎ Request Fix</button>
-          </div>
         </div>`
     })
     // Code blocks: ```lang\ncode\n``` → scrollable code card window (but NOT diff)
@@ -104,26 +88,6 @@ function renderMarkdown(text: string): string {
         </div>
         <div class="chat-code-scroll">
           <pre class="chat-code-content" id="${id}"><code>${fullCode}</code></pre>
-        </div>
-        <div class="code-card-actions">
-          <button class="code-approve-btn" id="approve-${id}" onclick="
-            this.textContent='✓ Approved';
-            this.disabled=true;
-            this.style.opacity='0.5';
-            var actions = JSON.parse(localStorage.getItem('review-actions')||'[]');
-            actions.push({id:'${id}',action:'approved',code:'${codePreview}',timestamp:Date.now()});
-            localStorage.setItem('review-actions',JSON.stringify(actions));
-            window.dispatchEvent(new Event('review-action'));
-          ">✓ Approve</button>
-          <button class="code-fix-btn" id="fix-${id}" onclick="
-            this.textContent='✎ Fix Requested';
-            this.disabled=true;
-            this.style.opacity='0.5';
-            var actions = JSON.parse(localStorage.getItem('review-actions')||'[]');
-            actions.push({id:'${id}',action:'rejected',code:'${codePreview}',timestamp:Date.now()});
-            localStorage.setItem('review-actions',JSON.stringify(actions));
-            window.dispatchEvent(new Event('review-action'));
-          ">✎ Request Fix</button>
         </div>
       </div>`
     })
@@ -1333,43 +1297,6 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
           background: rgba(100,100,100,0.1);
           color: var(--text-tertiary);
           font-size: 10px;
-        }
-        .review-request-actions {
-          display: flex;
-          gap: 8px;
-          padding: 8px 12px;
-          border-top: 1px solid rgba(255,255,255,0.06);
-          background: rgba(0,0,0,0.2);
-        }
-        .review-approve-btn {
-          flex: 1;
-          padding: 6px 12px;
-          border: 1px solid rgba(74,222,128,0.3);
-          background: rgba(74,222,128,0.1);
-          color: #4ade80;
-          border-radius: 6px;
-          font-size: 11px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.15s;
-        }
-        .review-approve-btn:hover {
-          background: rgba(74,222,128,0.2);
-        }
-        .review-reject-btn {
-          flex: 1;
-          padding: 6px 12px;
-          border: 1px solid rgba(251,191,36,0.3);
-          background: rgba(251,191,36,0.1);
-          color: #fbbf24;
-          border-radius: 6px;
-          font-size: 11px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.15s;
-        }
-        .review-reject-btn:hover {
-          background: rgba(251,191,36,0.2);
         }
       `}</style>
     </aside>

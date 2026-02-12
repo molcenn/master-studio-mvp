@@ -88,13 +88,13 @@ function renderMarkdown(text: string, role: string = 'agent'): string {
       const needsApproval = text.includes('onay') || text.includes('Onay') || text.includes('approve') || text.includes('uygula') || text.includes('Uygula') || text.includes('eklensin mi') || text.includes('değiştirilsin mi') || text.includes('yapayım mı') || text.includes('uygun mu')
       const approvalButtons = needsApproval ? `
         <div class="code-card-actions">
-          <button class="code-card-approve" onclick="this.textContent='✓ Approved';this.style.opacity='0.6';this.disabled=true">Approve</button>
-          <button class="code-card-reject" onclick="this.textContent='✗ Rejected';this.style.opacity='0.6';this.disabled=true">Reject</button>
+          <button class="code-card-approve" onclick="this.textContent='✓';this.style.opacity='0.6';this.disabled=true;this.parentElement.querySelector('.code-card-reject').style.display='none'">✓ Approve</button>
+          <button class="code-card-reject" onclick="this.textContent='✗';this.style.opacity='0.6';this.disabled=true;this.parentElement.querySelector('.code-card-approve').style.display='none'">✗ Reject</button>
         </div>` : ''
       return `<div class="chat-code-card">
         <div class="chat-code-card-header">
           <span class="chat-code-lines">${lineCount} lines</span>
-          <button class="chat-code-copy" onclick="navigator.clipboard.writeText(document.getElementById('${id}').textContent);this.textContent='✓ Copied';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
+          <button class="chat-code-copy" onclick="navigator.clipboard.writeText(document.getElementById('${id}').textContent);this.textContent='✓';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
         </div>
         <div class="chat-code-scroll">
           <pre class="chat-code-content" id="${id}"><code>${fullCode}</code></pre>
@@ -1171,7 +1171,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
           color: var(--text-primary);
         }
         .chat-code-scroll {
-          max-height: 300px;
+          max-height: 100px;
           overflow-y: auto;
           overflow-x: hidden;
         }
@@ -1266,7 +1266,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
           color: var(--text-primary);
         }
         .diff-view-container {
-          max-height: 300px;
+          max-height: 100px;
           overflow-y: auto;
           overflow-x: hidden;
         }

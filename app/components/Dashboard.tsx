@@ -15,7 +15,10 @@ export default function Dashboard() {
   const [activeView, setActiveView] = useState<ViewType>('dashboard')
   const [chatWidth, setChatWidth] = useState(380)
 
-  if (status === 'loading') {
+  // Dev mode: skip auth for local testing
+  const isDev = process.env.NODE_ENV === 'development'
+  
+  if (!isDev && status === 'loading') {
     return (
       <div className="h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #0a0a14 0%, #12122a 40%, #0f1a2e 70%, #0a0f1a 100%)' }}>
         <div style={{ color: 'var(--text-secondary)' }}>Loading...</div>
@@ -23,9 +26,12 @@ export default function Dashboard() {
     )
   }
 
-  if (!session) {
+  if (!isDev && !session) {
     redirect('/auth/signin')
   }
+
+  // Mock user for dev mode
+  const currentUser = session?.user || { name: 'Murat', email: 'dev@localhost', image: null }
 
   return (
     <div 
@@ -40,7 +46,7 @@ export default function Dashboard() {
       <Sidebar 
         activeProject={activeProject} 
         setActiveProject={setActiveProject}
-        user={session.user}
+        user={currentUser}
         activeView={activeView}
         setActiveView={setActiveView}
       />

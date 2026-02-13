@@ -138,6 +138,8 @@ interface ChatAgent {
 
 const MODEL_DISPLAY_NAMES: Record<string, string> = {
   kimi: 'Kimi K2.5',
+  m25: 'M2.5 Lightning',
+  glm5: 'GLM-5',
   sonnet: 'Sonnet 4.5',
   opus: 'Opus 4.6',
   'gpt-4o': 'GPT-4o',
@@ -427,7 +429,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
     // Model command sync
     if (msg.startsWith('/model ')) {
       const model = msg.split(' ')[1]
-      if (['kimi', 'sonnet', 'opus', 'gpt-4o'].includes(model)) {
+      if (['kimi', 'm25', 'glm5', 'sonnet', 'opus', 'gpt-4o'].includes(model)) {
         setSelectedModel(model)
       }
     }
@@ -445,6 +447,8 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
           body: JSON.stringify({
             task,
             model: selectedModel === 'kimi' ? 'moonshot/kimi-k2.5' :
+                   selectedModel === 'm25' ? 'minimax/MiniMax-M2.5-Lightning' :
+                   selectedModel === 'glm5' ? 'zai/glm-5' :
                    selectedModel === 'sonnet' ? 'anthropic/claude-sonnet-4-5-20250929' :
                    selectedModel === 'opus' ? 'anthropic/claude-opus-4-6' :
                    selectedModel === 'gpt-4o' ? 'openai/gpt-4o' : 'moonshot/kimi-k2.5'
@@ -713,6 +717,8 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
                 }}
               >
                 <option value="kimi">Kimi K2.5</option>
+                <option value="m25">M2.5 Lightning</option>
+                <option value="glm5">GLM-5</option>
                 <option value="sonnet">Sonnet 4.5</option>
                 <option value="opus">Opus 4.6</option>
                 <option value="gpt-4o">GPT-4o</option>
@@ -788,6 +794,8 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
                   onChange={(e) => setNewAgentModel(e.target.value)}
                 >
                   <option value="kimi">Kimi K2.5</option>
+                  <option value="m25">M2.5 Lightning</option>
+                  <option value="glm5">GLM-5</option>
                   <option value="sonnet">Sonnet 4.5</option>
                   <option value="opus">Opus 4.6</option>
                   <option value="gpt-4o">GPT-4o</option>

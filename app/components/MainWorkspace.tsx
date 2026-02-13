@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react'
 import PlanView from './PlanView'
+import SettingsPanel from './SettingsPanel'
+import DeleteConfirmationModal from './DeleteConfirmationModal'
+import Calendar from './Calendar'
 
 interface Project {
   id: string
@@ -39,7 +42,7 @@ interface Review {
   diff: string | null
 }
 
-type ViewType = 'dashboard' | 'workspace' | 'files' | 'calendar'
+type ViewType = 'dashboard' | 'workspace' | 'files' | 'calendar' | 'settings'
 type ReviewFilter = 'all' | 'pending' | 'approved' | 'rejected'
 type IdeTabType = 'code' | 'preview' | 'milestones' | 'plan'
 
@@ -148,9 +151,22 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
   const [recentMessages, setRecentMessages] = useState<Message[]>([])
   const [isEditingName, setIsEditingName] = useState(false)
   const [editName, setEditName] = useState('')
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [isDeleting, setIsDeleting] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  
+  // Delete confirmation modal states
+  const [deleteModal, setDeleteModal] = useState<{
+    isOpen: boolean
+    type: 'project' | 'milestone' | 'task' | 'comment' | null
+    itemId: string | null
+    itemName: string
+    isDeleting: boolean
+  }>({
+    isOpen: false,
+    type: null,
+    itemId: null,
+    itemName: '',
+    isDeleting: false
+  })
   
   // Files view state
   const [files, setFiles] = useState<FileItem[]>([])
@@ -312,24 +328,73 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
     }
   }
 
-  // Delete project
-  const deleteProject = async () => {
-    if (!activeProject) return
-    setIsDeleting(true)
+  // Open delete confirmation modal
+  const openDeleteModal = (type: 'project' | 'milestone' | 'task' | 'comment', itemId: string, itemName: string) => {
+    setDeleteModal({
+      isOpen: true,
+      type,
+      itemId,
+      itemName,
+      isDeleting: false
+    })
+  }
+
+  // Close delete confirmation modal
+  const closeDeleteModal = () => {
+    if (deleteModal.isDeleting) return
+    setDeleteModal(prev => ({ ...prev, isOpen: false }))
+  }
+
+  // Handle delete confirmation
+  const handleDeleteConfirm = async () => {
+    if (!deleteModal.type || !deleteModal.itemId) return
+    
+    setDeleteModal(prev => ({ ...prev, isDeleting: true }))
+    
     try {
-      const res = await fetch(`/api/projects/${activeProject}`, {
-        method: 'DELETE'
-      })
-      if (res.ok) {
-        setActiveProject(DEFAULT_PROJECT_ID)
-        setShowDeleteModal(false)
-        setActiveView('dashboard')
+      switch (deleteModal.type) {
+        case 'project':
+          await deleteProject(deleteModal.itemId)
+          break
+        case 'milestone':
+          deleteMilestoneConfirmed(deleteModal.itemId)
+          break
+        case 'task':
+          // Task deletion is handled with milestoneId.taskId format
+          const [milestoneId, taskId] = deleteModal.itemId.split('.')
+          if (milestoneId && taskId) {
+            deleteTaskConfirmed(milestoneId, taskId)
+          }
+          break
+        case 'comment':
+          // Comment deletion is handled with milestoneId.index format
+          const [commentMilestoneId, commentIndex] = deleteModal.itemId.split('.')
+          if (commentMilestoneId && commentIndex !== undefined) {
+            deleteCommentConfirmed(commentMilestoneId, parseInt(commentIndex, 10))
+          }
+          break
       }
-    } catch (err) {
-      console.error('Error deleting project:', err)
     } finally {
-      setIsDeleting(false)
+      setDeleteModal(prev => ({ ...prev, isOpen: false, isDeleting: false }))
     }
+  }
+
+  // Delete project
+  const deleteProject = async (projectId: string) => {
+    const res = await fetch(`/api/projects/${projectId}`, {
+      method: 'DELETE'
+    })
+    if (res.ok) {
+      setActiveProject(DEFAULT_PROJECT_ID)
+      setActiveView('dashboard')
+    }
+  }
+
+  // Legacy function for backward compatibility
+  const initiateProjectDelete = () => {
+    if (!activeProject) return
+    const projectName = activeProjectData?.name || 'this project'
+    openDeleteModal('project', activeProject, projectName)
   }
 
   const fetchCodeBlocks = async () => {
@@ -513,7 +578,11 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
     }))
   }
 
-  const deleteMilestone = (id: string) => {
+  const deleteMilestone = (id: string, name: string) => {
+    openDeleteModal('milestone', id, name)
+  }
+
+  const deleteMilestoneConfirmed = (id: string) => {
     setMilestones(milestones.filter(m => m.id !== id))
   }
 
@@ -548,7 +617,11 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
     } : m))
   }
 
-  const deleteTask = (milestoneId: string, taskId: string) => {
+  const deleteTask = (milestoneId: string, taskId: string, taskName: string) => {
+    openDeleteModal('task', `${milestoneId}.${taskId}`, taskName)
+  }
+
+  const deleteTaskConfirmed = (milestoneId: string, taskId: string) => {
     setMilestones(milestones.map(m => m.id === milestoneId ? {
       ...m,
       tasks: m.tasks.filter(t => t.id !== taskId)
@@ -606,7 +679,11 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
   }
 
   // Delete comment from milestone
-  const deleteComment = (milestoneId: string, commentIndex: number) => {
+  const deleteComment = (milestoneId: string, commentIndex: number, commentPreview: string) => {
+    openDeleteModal('comment', `${milestoneId}.${commentIndex}`, commentPreview)
+  }
+
+  const deleteCommentConfirmed = (milestoneId: string, commentIndex: number) => {
     setMilestones(milestones.map(m => m.id === milestoneId ? {
       ...m,
       comments: m.comments?.filter((_, i) => i !== commentIndex)
@@ -621,7 +698,8 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
     dashboard: displayProject ? displayProject.name : 'Dashboard',
     workspace: 'Workspace',
     files: displayProject ? `${displayProject.name} — Files` : 'Files',
-    calendar: 'Calendar'
+    calendar: 'Calendar',
+    settings: 'Settings'
   }
 
   // Empty state component
@@ -1070,7 +1148,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                                     </h3>
                                   )}
                                   <button 
-                                    onClick={() => deleteMilestone(milestone.id)}
+                                    onClick={() => deleteMilestone(milestone.id, milestone.title)}
                                     title="Delete"
                                     style={{
                                       background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)',
@@ -1141,7 +1219,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                                         }}
                                       />
                                       <button
-                                        onClick={() => deleteTask(milestone.id, task.id)}
+                                        onClick={() => deleteTask(milestone.id, task.id, task.text)}
                                         style={{
                                           background: 'none', border: 'none', color: 'var(--text-tertiary)',
                                           cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center'
@@ -1208,7 +1286,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                             <span style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>{timeAgo(comment.timestamp)}</span>
                                             <button
-                                              onClick={() => deleteComment(milestone.id, index)}
+                                              onClick={() => deleteComment(milestone.id, index, comment.text)}
                                               style={{
                                                 background: 'none', border: 'none', color: 'var(--text-tertiary)',
                                                 cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center'
@@ -1391,6 +1469,10 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
               <div style={{ fontSize: '13px' }}>Coming soon...</div>
             </div>
           </div>
+        )}
+
+        {activeView === 'settings' && (
+          <SettingsPanel />
         )}
       </div>
 
@@ -2547,6 +2629,18 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
         }
 
       `}</style>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        isOpen={deleteModal.isOpen}
+        onClose={closeDeleteModal}
+        onConfirm={handleDeleteConfirm}
+        title={deleteModal.type === 'project' ? 'Delete Project' : 
+               deleteModal.type === 'milestone' ? 'Delete Milestone' :
+               deleteModal.type === 'task' ? 'Delete Task' : 'Delete Comment'}
+        itemName={deleteModal.itemName}
+        isDeleting={deleteModal.isDeleting}
+      />
     </main>
   )
 }

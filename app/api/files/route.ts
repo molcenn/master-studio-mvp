@@ -57,3 +57,39 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to list files' }, { status: 500 })
   }
 }
+
+// DELETE /api/files?key=xxx - Delete file from Supabase Storage
+export async function DELETE(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const { searchParams } = new URL(req.url)
+  const fileKey = searchParams.get('key')
+
+  if (!fileKey) {
+    return NextResponse.json({ error: 'Missing file key' }, { status: 400 })
+  }
+
+  try {
+    // Verify ownership - the key should start with user id
+    if (!fileKey.startsWith(session.user.id)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+    }
+
+    const { error } = await supabase.storage
+      .from('files')
+      .remove([fileKey])
+
+    if (error) {
+      console.error('Storage delete error:', error)
+      return NextResponse.json({ error: 'Failed to delete file' }, { status: 500 })
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error deleting file:', error)
+    return NextResponse.json({ error: 'Failed to delete file' }, { status: 500 })
+  }
+}

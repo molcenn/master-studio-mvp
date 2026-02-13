@@ -8,7 +8,7 @@ interface Project {
   created_at: string
 }
 
-type ViewType = 'dashboard' | 'workspace' | 'files' | 'calendar'
+type ViewType = 'dashboard' | 'workspace' | 'files' | 'calendar' | 'settings'
 
 interface SidebarProps {
   activeProject: string
@@ -168,6 +168,16 @@ export default function Sidebar({ activeProject, setActiveProject, user, activeV
               <line x1="3" y1="10" x2="21" y2="10"/>
             </svg>
             Calendar
+          </div>
+          <div 
+            className={`nav-item ${activeView === 'settings' ? 'active' : ''}`}
+            onClick={() => setActiveView('settings')}
+          >
+            <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.26.46.4.98.42 1.51H21a2 2 0 0 1 0 4h-.09c-.53.02-1.05.16-1.51.42z"/>
+            </svg>
+            Settings
           </div>
         </div>
 

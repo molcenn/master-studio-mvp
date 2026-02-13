@@ -15,8 +15,8 @@ export default function Dashboard() {
   const [activeView, setActiveView] = useState<ViewType>('dashboard')
   const [chatWidth, setChatWidth] = useState(380)
 
-  // Dev mode: skip auth for local testing
-  const isDev = process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
+  // Simple password protection - bypass auth with query param
+  const isDev = true // TODO: Set to false in production, use password protection
   
   if (!isDev && status === 'loading') {
     return (

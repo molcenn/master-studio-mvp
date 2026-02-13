@@ -50,7 +50,7 @@ function renderMarkdown(text: string, role: string = 'agent'): string {
       
       // Parse diff lines with color coding
       const lines = diffCode.trim().split('\n')
-      const diffLines = lines.map(line => {
+      const diffLines = lines.map((line: string) => {
         const escaped = escapeHtml(line)
         if (line.startsWith('-')) {
           return `<div class="diff-line diff-removed"><span class="diff-marker">-</span><span class="diff-content">${escaped.substring(1)}</span></div>`

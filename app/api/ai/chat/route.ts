@@ -156,9 +156,14 @@ function parseStreamChunk(provider: string, line: string): string | null {
 
 // POST /api/ai/chat - Send message to AI provider with streaming
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+  // Demo mode bypass - skip auth
+  if (DEMO_MODE) {
+    // Skip auth in demo mode
+  } else {
+    const session = await getServerSession(authOptions)
+    if (!session) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+    }
   }
 
   const { projectId, message, context = [], model: selectedModel = 'kimi-k2.5' } = await req.json()
@@ -173,6 +178,18 @@ export async function POST(req: NextRequest) {
 
   if (!config) {
     return new Response(JSON.stringify({ error: `Unknown model: ${selectedModel}` }), { status: 400 })
+  }
+
+  // Demo mode fallback - return mock response if no API key
+  if (DEMO_MODE && !config.apiKey) {
+    const mockResponse = MOCK_RESPONSES[Math.floor(Math.random() * MOCK_RESPONSES.length)]
+    
+    // Return mock response directly without database
+    return new Response(JSON.stringify({
+      userMessage: { content: message, role: 'user' },
+      aiMessage: { content: mockResponse, role: 'assistant' },
+      demo: true
+    }))
   }
 
   if (!config.apiKey) {

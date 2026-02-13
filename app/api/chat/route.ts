@@ -11,9 +11,9 @@ const MOCK_MESSAGES: Record<string, any[]> = {
   ]
 }
 
-// Check if in dev mode
+// Check if in dev mode - ALWAYS skip auth for local development
 const isDevMode = () => {
-  return process.env.NODE_ENV === 'development'
+  return process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 }
 
 // GET /api/chat?projectId=xxx

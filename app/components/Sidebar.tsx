@@ -1,6 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { 
+  getProjects, 
+  createProject as createProjectLS, 
+  deleteProject as deleteProjectLS 
+} from '@/lib/localStorage'
 
 interface Project {
   id: string
@@ -24,10 +29,6 @@ interface SidebarProps {
 
 const PROJECT_COLORS = ['#00d4ff', '#a855f7', '#ec4899', '#22c55e', '#f59e0b', '#ef4444', '#3b82f6']
 
-const STORAGE_KEY = 'master-studio-projects'
-
-// Skills data removed
-
 export default function Sidebar({ activeProject, setActiveProject, user, activeView, setActiveView }: SidebarProps) {
   const [projects, setProjects] = useState<Project[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -35,93 +36,44 @@ export default function Sidebar({ activeProject, setActiveProject, user, activeV
   const [newProjectName, setNewProjectName] = useState('')
   const [isCreating, setIsCreating] = useState(false)
 
-  // Load projects from localStorage + API
+  // Load projects from localStorage
   useEffect(() => {
-    fetchProjects()
+    loadProjects()
+    
+    // Listen for storage changes from other tabs
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'master-studio-projects') {
+        loadProjects()
+      }
+    }
+    window.addEventListener('storage', handleStorageChange)
+    return () => window.removeEventListener('storage', handleStorageChange)
   }, [])
 
-  // Save projects to localStorage whenever they change
-  useEffect(() => {
-    if (projects.length > 0) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(projects))
-    }
-  }, [projects])
-
-  const fetchProjects = async () => {
+  const loadProjects = () => {
     try {
-      // First, try to load from localStorage
-      const stored = localStorage.getItem(STORAGE_KEY)
-      let localProjects: Project[] = []
-      if (stored) {
-        try {
-          localProjects = JSON.parse(stored)
-        } catch (e) {
-          console.error('Error parsing stored projects:', e)
-        }
-      }
-
-      // Then fetch from API
-      const res = await fetch('/api/projects')
-      if (!res.ok) throw new Error('Failed to fetch projects')
-      const data = await res.json()
-      const apiProjects = data.projects || []
-
-      // Merge local and API projects (local takes precedence for same IDs)
-      const apiProjectIds = new Set(apiProjects.map((p: Project) => p.id))
-      const uniqueLocalProjects = localProjects.filter((p: Project) => !apiProjectIds.has(p.id))
-      const mergedProjects = [...apiProjects, ...uniqueLocalProjects]
-
-      setProjects(mergedProjects)
+      const storedProjects = getProjects()
+      setProjects(storedProjects)
     } catch (err) {
-      console.error('Error fetching projects:', err)
-      // Fallback to localStorage only
-      const stored = localStorage.getItem(STORAGE_KEY)
-      if (stored) {
-        try {
-          setProjects(JSON.parse(stored))
-        } catch (e) {
-          console.error('Error parsing stored projects:', e)
-        }
-      }
+      console.error('Error loading projects:', err)
     } finally {
       setIsLoading(false)
     }
   }
 
-  const createProject = async () => {
+  const createProject = () => {
     if (!newProjectName.trim()) return
     
     setIsCreating(true)
     try {
-      // Try API first
-      const res = await fetch('/api/projects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newProjectName.trim() }),
-      })
-      
-      if (!res.ok) throw new Error('Failed to create project')
-      
-      const data = await res.json()
-      const newProject = data.project
-
-      // Add to local state (will be saved to localStorage via useEffect)
+      const newProject = createProjectLS(newProjectName.trim())
       setProjects(prev => [...prev, newProject])
       setActiveProject(newProject.id)
       setNewProjectName('')
       setShowNewProjectModal(false)
     } catch (err) {
       console.error('Error creating project:', err)
-      // Fallback: create locally
-      const newProject: Project = {
-        id: `local-${Date.now()}`,
-        name: newProjectName.trim(),
-        created_at: new Date().toISOString()
-      }
-      setProjects(prev => [...prev, newProject])
-      setActiveProject(newProject.id)
-      setNewProjectName('')
-      setShowNewProjectModal(false)
+      alert('Failed to create project')
     } finally {
       setIsCreating(false)
     }
@@ -129,21 +81,15 @@ export default function Sidebar({ activeProject, setActiveProject, user, activeV
 
   const getProjectColor = (index: number) => PROJECT_COLORS[index % PROJECT_COLORS.length]
 
-  const deleteProject = async (projectId: string) => {
+  const deleteProject = (projectId: string) => {
     if (!confirm('Delete this project?')) return
     
     try {
-      const res = await fetch(`/api/projects/${projectId}`, {
-        method: 'DELETE',
-      })
-      
-      if (!res.ok) throw new Error('Failed to delete project')
-      
-      // Remove from local state (will update localStorage via useEffect)
+      deleteProjectLS(projectId)
       const updatedProjects = projects.filter(p => p.id !== projectId)
       setProjects(updatedProjects)
       
-      // If deleted project was active, switch to default
+      // If deleted project was active, switch to first available
       if (activeProject === projectId) {
         if (updatedProjects.length > 0) {
           setActiveProject(updatedProjects[0].id)
@@ -153,17 +99,6 @@ export default function Sidebar({ activeProject, setActiveProject, user, activeV
       }
     } catch (err) {
       console.error('Error deleting project:', err)
-      // Fallback: remove locally anyway
-      const updatedProjects = projects.filter(p => p.id !== projectId)
-      setProjects(updatedProjects)
-      
-      if (activeProject === projectId) {
-        if (updatedProjects.length > 0) {
-          setActiveProject(updatedProjects[0].id)
-        } else {
-          setActiveProject('00000000-0000-0000-0000-000000000001')
-        }
-      }
       alert('Failed to delete project')
     }
   }
@@ -242,8 +177,6 @@ export default function Sidebar({ activeProject, setActiveProject, user, activeV
             Settings
           </div>
         </div>
-
-        {/* Skills section removed - replaced by Calendar view */}
 
         {/* Projects */}
         <div style={{ padding: '12px 14px' }}>
@@ -408,15 +341,6 @@ export default function Sidebar({ activeProject, setActiveProject, user, activeV
         }
         .nav-icon { width: 18px; height: 18px; opacity: 0.6; flex-shrink: 0; }
         .nav-item.active .nav-icon { opacity: 1; }
-        .nav-badge {
-          margin-left: auto; min-width: 18px; height: 18px;
-          border-radius: 9px; font-size: 10px; font-weight: 600;
-          display: flex; align-items: center; justify-content: center;
-          padding: 0 5px;
-        }
-        .nav-badge.red { background: var(--accent-red); color: white; }
-        .nav-badge.purple { background: rgba(168,85,247,0.2); color: var(--accent-purple); }
-        /* Skills CSS removed */
         .project-item {
           display: flex; align-items: center; gap: 10px;
           padding: 8px 12px; border-radius: 8px;

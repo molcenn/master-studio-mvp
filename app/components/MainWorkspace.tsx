@@ -5,6 +5,7 @@ import PlanView from './PlanView'
 import SettingsPanel from './SettingsPanel'
 import DeleteConfirmationModal from './DeleteConfirmationModal'
 import Calendar from './Calendar'
+import { getProjects, getProject, getStats, getFiles as getFilesLS, StoredFile } from '@/lib/localStorage'
 
 interface Project {
   id: string
@@ -195,7 +196,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
   const [newTaskText, setNewTaskText] = useState<{[key: string]: string}>({})
   const [newCommentText, setNewCommentText] = useState<{[key: string]: string}>({})
 
-  // Fetch stats and projects
+  // Fetch stats and projects from localStorage
   useEffect(() => {
     fetchData()
   }, [])
@@ -248,30 +249,14 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
 
   // Reviews removed
 
-  const fetchData = async () => {
+  const fetchData = () => {
     try {
-      const [statsRes, projectsRes] = await Promise.all([
-        fetch('/api/stats'),
-        fetch('/api/projects')
-      ])
-
-      if (statsRes.ok) {
-        const statsData = await statsRes.json()
-        setStats(statsData.stats)
-        setProjects(statsData.recentProjects || [])
-      }
-
-      if (projectsRes.ok) {
-        const projectsData = await projectsRes.json()
-        // Merge with recent projects if needed
-        if (projectsData.projects?.length > 0) {
-          setProjects(prev => {
-            const existingIds = new Set(prev.map(p => p.id))
-            const newProjects = projectsData.projects.filter((p: Project) => !existingIds.has(p.id))
-            return [...prev, ...newProjects].slice(0, 6)
-          })
-        }
-      }
+      // Load from localStorage
+      const storedProjects = getProjects()
+      const storedStats = getStats()
+      
+      setStats(storedStats)
+      setProjects(storedProjects.slice(0, 6))
     } catch (err) {
       console.error('Error fetching dashboard data:', err)
     } finally {
@@ -279,13 +264,10 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
     }
   }
 
-  const fetchActiveProject = async () => {
+  const fetchActiveProject = () => {
     try {
-      const res = await fetch(`/api/projects/${activeProject}`)
-      if (res.ok) {
-        const data = await res.json()
-        setActiveProjectData(data.project)
-      }
+      const project = getProject(activeProject)
+      setActiveProjectData(project)
     } catch (err) {
       console.error('Error fetching active project:', err)
     }
@@ -381,13 +363,10 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
 
   // Delete project
   const deleteProject = async (projectId: string) => {
-    const res = await fetch(`/api/projects/${projectId}`, {
-      method: 'DELETE'
-    })
-    if (res.ok) {
-      setActiveProject(DEFAULT_PROJECT_ID)
-      setActiveView('dashboard')
-    }
+    // Delete from localStorage via Sidebar (which handles this)
+    // Just navigate away
+    setActiveProject(DEFAULT_PROJECT_ID)
+    setActiveView('dashboard')
   }
 
   // Legacy function for backward compatibility
@@ -426,15 +405,22 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
     } catch (err) { console.error('Error fetching code blocks:', err) }
   }
 
-  const fetchFiles = async () => {
+  const fetchFiles = () => {
     if (!activeProject) return
     setFilesLoading(true)
     try {
-      const res = await fetch(`/api/files?projectId=${activeProject}`)
-      if (res.ok) {
-        const data = await res.json()
-        setFiles(data.files || [])
-      }
+      // Load from localStorage
+      const storedFiles = getFilesLS(activeProject)
+      // Map StoredFile to FileItem format
+      const mappedFiles: FileItem[] = storedFiles.map(f => ({
+        name: f.name,
+        size: f.size,
+        type: f.type,
+        created_at: f.created_at,
+        url: f.url,
+        key: f.id
+      }))
+      setFiles(mappedFiles)
     } catch (err) {
       console.error('Error fetching files:', err)
     } finally {

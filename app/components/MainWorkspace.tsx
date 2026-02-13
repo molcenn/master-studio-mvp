@@ -1457,18 +1457,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
         )}
 
         {activeView === 'calendar' && (
-          <div style={{ flex: 1, padding: '20px', overflow: 'auto' }}>
-            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-tertiary)' }}>
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ margin: '0 auto 16px', display: 'block' }}>
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-                <line x1="16" y1="2" x2="16" y2="6"/>
-                <line x1="8" y1="2" x2="8" y2="6"/>
-                <line x1="3" y1="10" x2="21" y2="10"/>
-              </svg>
-              <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px' }}>Calendar & Planning</div>
-              <div style={{ fontSize: '13px' }}>Coming soon...</div>
-            </div>
-          </div>
+          <Calendar />
         )}
 
         {activeView === 'settings' && (

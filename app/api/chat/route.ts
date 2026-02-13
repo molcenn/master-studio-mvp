@@ -11,28 +11,26 @@ const MOCK_MESSAGES: Record<string, any[]> = {
   ]
 }
 
-// Check if in dev/mock mode
-const isMockMode = () => {
-  return process.env.MOCK_MODE === 'true' || process.env.NODE_ENV === 'development'
+// Check if in dev mode
+const isDevMode = () => {
+  return process.env.NODE_ENV === 'development'
 }
 
 // GET /api/chat?projectId=xxx
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions)
-  
-  // Mock mode: bypass auth
-  if (!session && !isMockMode()) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
   const projectId = req.nextUrl.searchParams.get('projectId')
   if (!projectId) {
     return NextResponse.json({ error: 'Project ID required' }, { status: 400 })
   }
 
-  // Mock mode: return mock messages
-  if (isMockMode()) {
+  // Dev mode: skip auth check entirely
+  if (isDevMode()) {
     return NextResponse.json({ messages: MOCK_MESSAGES[projectId] || [] })
+  }
+
+  const session = await getServerSession(authOptions)
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   try {
@@ -53,13 +51,6 @@ export async function GET(req: NextRequest) {
 
 // POST /api/chat
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions)
-  
-  // Mock mode: bypass auth
-  if (!session && !isMockMode()) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
   const body = await req.json()
   const { projectId, content, type = 'text', fileInfo } = body
 
@@ -67,8 +58,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
-  // Mock mode: store in memory
-  if (isMockMode()) {
+  // Dev mode: skip auth check entirely, store in memory
+  if (isDevMode()) {
     const newMessage = {
       id: `msg-${Date.now()}`,
       project_id: projectId,
@@ -83,6 +74,11 @@ export async function POST(req: NextRequest) {
     }
     MOCK_MESSAGES[projectId].push(newMessage)
     return NextResponse.json({ message: newMessage })
+  }
+
+  const session = await getServerSession(authOptions)
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   // SECURITY: Hardcode role to 'user' to prevent injection

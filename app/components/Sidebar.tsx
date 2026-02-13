@@ -139,19 +139,31 @@ export default function Sidebar({ activeProject, setActiveProject, user, activeV
       
       if (!res.ok) throw new Error('Failed to delete project')
       
-      setProjects(projects.filter(p => p.id !== projectId))
+      // Remove from local state (will update localStorage via useEffect)
+      const updatedProjects = projects.filter(p => p.id !== projectId)
+      setProjects(updatedProjects)
       
       // If deleted project was active, switch to default
       if (activeProject === projectId) {
-        const remaining = projects.filter(p => p.id !== projectId)
-        if (remaining.length > 0) {
-          setActiveProject(remaining[0].id)
+        if (updatedProjects.length > 0) {
+          setActiveProject(updatedProjects[0].id)
         } else {
           setActiveProject('00000000-0000-0000-0000-000000000001')
         }
       }
     } catch (err) {
       console.error('Error deleting project:', err)
+      // Fallback: remove locally anyway
+      const updatedProjects = projects.filter(p => p.id !== projectId)
+      setProjects(updatedProjects)
+      
+      if (activeProject === projectId) {
+        if (updatedProjects.length > 0) {
+          setActiveProject(updatedProjects[0].id)
+        } else {
+          setActiveProject('00000000-0000-0000-0000-000000000001')
+        }
+      }
       alert('Failed to delete project')
     }
   }

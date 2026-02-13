@@ -26,9 +26,8 @@ export function useChat({ projectId, model }: UseChatOptions) {
   const [streamingContent, setStreamingContent] = useState<string>('')
   const [error, setError] = useState<string | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
-  const streamingContentRef = useRef<string>('') // Ref to avoid stale closure
 
-  // Fetch messages
+  // Fetch messages on mount
   useEffect(() => {
     if (!session) return
 
@@ -37,8 +36,9 @@ export function useChat({ projectId, model }: UseChatOptions) {
         const res = await fetch(`/api/chat?projectId=${projectId}`)
         if (!res.ok) throw new Error('Failed to fetch messages')
         const data = await res.json()
-        setMessages(data.messages)
+        setMessages(data.messages || [])
       } catch (err) {
+        console.error('Failed to fetch messages:', err)
         setError(err instanceof Error ? err.message : 'Unknown error')
       }
     }
@@ -52,7 +52,6 @@ export function useChat({ projectId, model }: UseChatOptions) {
 
     setIsLoading(true)
     setStreamingContent('')
-    streamingContentRef.current = '' // Reset ref
     setError(null)
     
     // Create new abort controller for this request
@@ -85,92 +84,86 @@ export function useChat({ projectId, model }: UseChatOptions) {
         signal: abortControllerRef.current.signal,
       })
 
-      if (!res.ok) throw new Error('Failed to send message')
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || `HTTP ${res.status}`)
+      }
 
       const reader = res.body?.getReader()
       if (!reader) throw new Error('No response body')
 
       const decoder = new TextDecoder()
-      let userMessageData: Message | null = null
-      let aiMessageId: string | null = null
       let fullContent = ''
-      let buffer = '' // Buffer for incomplete SSE events
+      let buffer = ''
+      let aiMessageId: string | null = null
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
 
-        // Append new chunk to buffer
         buffer += decoder.decode(value)
-        
-        // Split on double newlines (SSE event delimiter)
         const events = buffer.split('\n\n')
-        
-        // Keep the last item in buffer (could be incomplete)
         buffer = events.pop() || ''
-        
-        // Process complete events
+
         for (const event of events) {
           const lines = event.split('\n')
           
           for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const data = line.slice(6)
+            if (!line.startsWith('data: ')) continue
+            
+            const data = line.slice(6)
+            
+            try {
+              const parsed = JSON.parse(data)
               
-              let parsed: any
-              try {
-                parsed = JSON.parse(data)
-                
-                switch (parsed.type) {
-                  case 'user_message':
-                    userMessageData = parsed.message
-                    setMessages((prev) => [
-                      ...prev.filter(m => m.id !== tempUserMessage.id),
-                      parsed.message,
-                    ])
-                    break
-                  case 'ai_id':
-                    aiMessageId = parsed.messageId
-                    break
-                  case 'chunk':
-                    fullContent += parsed.content
-                    setStreamingContent(fullContent)
-                    streamingContentRef.current = fullContent // Keep ref in sync
-                    break
-                  case 'done':
-                    // Stream complete, add final message
-                    if (aiMessageId) {
-                      const aiMessage: Message = {
-                        id: aiMessageId,
-                        project_id: projectId,
-                        user_id: '00000000-0000-0000-0000-000000000099',
-                        role: 'assistant',
-                        content: fullContent,
-                        type: 'text',
-                        created_at: new Date().toISOString(),
-                      }
-                      setMessages((prev) => [...prev, aiMessage])
-                      setStreamingContent('')
-                      streamingContentRef.current = ''
+              switch (parsed.type) {
+                case 'user_message':
+                  // Replace temp message with real one
+                  setMessages((prev) => [
+                    ...prev.filter(m => m.id !== tempUserMessage.id),
+                    parsed.message,
+                  ])
+                  break
+                  
+                case 'ai_id':
+                  aiMessageId = parsed.messageId
+                  break
+                  
+                case 'chunk':
+                  fullContent += parsed.content
+                  setStreamingContent(fullContent)
+                  break
+                  
+                case 'done':
+                  if (aiMessageId && fullContent) {
+                    const aiMessage: Message = {
+                      id: aiMessageId,
+                      project_id: projectId,
+                      user_id: 'system',
+                      role: 'assistant',
+                      content: fullContent,
+                      type: 'text',
+                      created_at: new Date().toISOString(),
                     }
-                    break
-                  case 'error':
-                    // Propagate error to outer catch block
-                    throw new Error(parsed.error || 'Stream error')
-                }
-              } catch (e) {
-                // Re-throw errors from error case, ignore parse errors
-                if (parsed?.type === 'error') {
-                  throw e
-                }
-                // Otherwise ignore parse errors
+                    setMessages((prev) => [...prev, aiMessage])
+                  }
+                  setStreamingContent('')
+                  break
+                  
+                case 'error':
+                  throw new Error(parsed.error || 'Stream error')
+              }
+            } catch (e) {
+              // Re-throw intentional errors
+              if (e instanceof Error && e.message !== 'Unexpected token') {
+                throw e
               }
             }
           }
         }
       }
       
-      // Process any remaining buffer when stream ends
+      // Handle remaining buffer
       if (buffer.trim()) {
         const lines = buffer.split('\n')
         for (const line of lines) {
@@ -178,13 +171,11 @@ export function useChat({ projectId, model }: UseChatOptions) {
             const data = line.slice(6)
             try {
               const parsed = JSON.parse(data)
-              if (parsed.type === 'chunk' && parsed.content) {
-                fullContent += parsed.content
-              } else if (parsed.type === 'done' && aiMessageId) {
+              if (parsed.type === 'done' && aiMessageId && fullContent) {
                 const aiMessage: Message = {
                   id: aiMessageId,
                   project_id: projectId,
-                  user_id: '00000000-0000-0000-0000-000000000099',
+                  user_id: 'system',
                   role: 'assistant',
                   content: fullContent,
                   type: 'text',
@@ -192,7 +183,7 @@ export function useChat({ projectId, model }: UseChatOptions) {
                 }
                 setMessages((prev) => [...prev, aiMessage])
               }
-            } catch (e) {
+            } catch {
               // Ignore parse errors
             }
           }
@@ -200,28 +191,31 @@ export function useChat({ projectId, model }: UseChatOptions) {
       }
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
-        // User cancelled, add partial message using ref (avoids stale closure)
-        const partialContent = streamingContentRef.current
-        if (partialContent) {
-          const aiMessage: Message = {
-            id: 'stopped-' + Date.now(),
-            project_id: projectId,
-            user_id: '00000000-0000-0000-0000-000000000099',
-            role: 'assistant',
-            content: partialContent,
-            type: 'text',
-            created_at: new Date().toISOString(),
+        // User cancelled - keep partial content as message
+        setStreamingContent((current) => {
+          if (current) {
+            const aiMessage: Message = {
+              id: 'stopped-' + Date.now(),
+              project_id: projectId,
+              user_id: 'system',
+              role: 'assistant',
+              content: current,
+              type: 'text',
+              created_at: new Date().toISOString(),
+            }
+            setMessages((prev) => [...prev, aiMessage])
           }
-          setMessages((prev) => [...prev, aiMessage])
-        }
+          return ''
+        })
       } else {
+        console.error('Chat error:', err)
         setError(err instanceof Error ? err.message : 'Unknown error')
         setMessages((prev) => prev.filter(m => !m.id.startsWith('temp-')))
       }
     } finally {
       setIsLoading(false)
       setStreamingContent('')
-      streamingContentRef.current = ''
+      abortControllerRef.current = null
     }
   }, [projectId, session, messages, model])
 
@@ -248,7 +242,6 @@ export function useChat({ projectId, model }: UseChatOptions) {
       }
 
       const { fileUrl } = await res.json()
-
       await sendMessage(`Dosya: ${file.name}`, 'file', { name: file.name, url: fileUrl, type: file.type, size: file.size })
 
       return fileUrl
@@ -266,7 +259,6 @@ export function useChat({ projectId, model }: UseChatOptions) {
       abortControllerRef.current.abort()
       abortControllerRef.current = null
       setIsLoading(false)
-      // Partial message is handled in the AbortError catch block
     }
   }, [])
 

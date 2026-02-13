@@ -3,34 +3,184 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { supabase } from '@/lib/db'
 
-// OpenClaw Gateway - OpenAI-compatible endpoint
-const OPENCLAW_URL = process.env.OPENCLAW_URL || 'http://localhost:18789'
-const OPENCLAW_TOKEN = process.env.OPENCLAW_TOKEN
+const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 
-// POST /api/ai/chat - Send message to Betsy via Gateway and get response
+// Mock responses for demo/offline mode
+const MOCK_RESPONSES = [
+  "Merhaba! Ben Betsy, size nasıl yardımcı olabilirim? 🎯",
+  "Anlıyorum, bu konuda size yardımcı olabilirim. Detayları paylaşır mısınız?",
+  "Harika bir soru! Bunun üzerine çalışalım.",
+  "Projeniz için bazı önerilerim var. Başlayalım mı?",
+  "Bu konuyu adım adım ele alalım. İlk olarak ne yapmamı istersiniz?",
+]
+
+// Model to provider mapping
+const MODEL_CONFIG: Record<string, { provider: string; apiUrl: string; apiKey: string; modelId: string }> = {
+  'gpt-4o': {
+    provider: 'openai',
+    apiUrl: 'https://api.openai.com/v1/chat/completions',
+    apiKey: process.env.OPENAI_API_KEY || '',
+    modelId: 'gpt-4o',
+  },
+  'claude-opus': {
+    provider: 'anthropic',
+    apiUrl: 'https://api.anthropic.com/v1/messages',
+    apiKey: process.env.ANTHROPIC_API_KEY || '',
+    modelId: 'claude-opus-4-20250514',
+  },
+  'MiniMax-M2.5-Lightning': {
+    provider: 'minimax',
+    apiUrl: 'https://api.minimaxi.chat/v1/text/chatcompletion_v2',
+    apiKey: process.env.MINIMAX_API_KEY || '',
+    modelId: 'MiniMax-M2.5-Lightning',
+  },
+  'glm-5': {
+    provider: 'zai',
+    apiUrl: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+    apiKey: process.env.ZAI_API_KEY || '',
+    modelId: 'glm-5',
+  },
+  'kimi-k2.5': {
+    provider: 'moonshot',
+    apiUrl: 'https://api.moonshot.cn/v1/chat/completions',
+    apiKey: process.env.MOONSHOT_API_KEY || '',
+    modelId: 'kimi-k2.5',
+  },
+}
+
+// Aliases for convenience
+const MODEL_ALIASES: Record<string, string> = {
+  'kimi': 'kimi-k2.5',
+  'm25': 'MiniMax-M2.5-Lightning',
+  'glm5': 'glm-5',
+  'sonnet': 'claude-opus',
+  'opus': 'claude-opus',
+}
+
+// Default UUIDs for single-user mode
+const USER_UUID = '00000000-0000-0000-0000-000000000002'
+const SYSTEM_UUID = '00000000-0000-0000-0000-000000000099'
+
+// System prompt for Master Studio
+const SYSTEM_PROMPT = `This message is from the Master Studio Dashboard web interface. The Dashboard has an iframe preview panel — when you produce HTML/CSS/JS code, the user can see it in the Workspace > Preview tab. Do not search for browser, canvas, or node access — just produce code and write it as \`\`\`html code blocks. The user will see it in the preview.
+
+When user discusses project milestones or process changes, include a JSON block at the end of your response: \`\`\`milestone-update
+{action, milestoneTitle, detail}
+\`\`\` so the dashboard can sync.`
+
+// Build request body for each provider
+function buildProviderRequest(provider: string, modelId: string, messages: any[], stream: boolean) {
+  switch (provider) {
+    case 'openai':
+    case 'moonshot':
+    case 'zai':
+      return {
+        model: modelId,
+        messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages],
+        stream,
+        temperature: 0.7,
+      }
+    case 'anthropic':
+      return {
+        model: modelId,
+        messages: messages,
+        system: SYSTEM_PROMPT,
+        stream,
+        max_tokens: 4096,
+      }
+    case 'minimax':
+      return {
+        model: modelId,
+        messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages],
+        stream,
+        temperature: 0.7,
+      }
+    default:
+      throw new Error(`Unknown provider: ${provider}`)
+  }
+}
+
+// Build headers for each provider
+function buildProviderHeaders(provider: string, apiKey: string): Record<string, string> {
+  const baseHeaders: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+
+  switch (provider) {
+    case 'openai':
+    case 'moonshot':
+    case 'zai':
+      baseHeaders['Authorization'] = `Bearer ${apiKey}`
+      return baseHeaders
+    case 'anthropic':
+      baseHeaders['x-api-key'] = apiKey
+      baseHeaders['anthropic-version'] = '2023-06-01'
+      return baseHeaders
+    case 'minimax':
+      baseHeaders['Authorization'] = `Bearer ${apiKey}`
+      return baseHeaders
+    default:
+      throw new Error(`Unknown provider: ${provider}`)
+  }
+}
+
+// Parse stream chunk based on provider
+function parseStreamChunk(provider: string, line: string): string | null {
+  if (!line.startsWith('data: ')) return null
+  
+  const data = line.slice(6).trim()
+  if (data === '[DONE]') return null
+  
+  try {
+    const parsed = JSON.parse(data)
+    
+    switch (provider) {
+      case 'openai':
+      case 'moonshot':
+      case 'zai':
+        return parsed.choices?.[0]?.delta?.content || null
+      case 'anthropic':
+        if (parsed.type === 'content_block_delta') {
+          return parsed.delta?.text || null
+        }
+        return null
+      case 'minimax':
+        return parsed.choices?.[0]?.delta?.content || null
+      default:
+        return null
+    }
+  } catch {
+    return null
+  }
+}
+
+// POST /api/ai/chat - Send message to AI provider with streaming
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
   }
 
-  const { projectId, message, context = [], stream = false, model: selectedModel = 'kimi' } = await req.json()
-  
-  // Model mapping for Gateway
-  const modelMapping: Record<string, string> = {
-    kimi: 'openclaw:main',
-    sonnet: 'anthropic/claude-sonnet-4-5-20250929',
-    opus: 'anthropic/claude-opus-4-6',
-  }
-  const gatewayModel = modelMapping[selectedModel] || 'openclaw:main'
+  const { projectId, message, context = [], model: selectedModel = 'kimi-k2.5' } = await req.json()
   
   if (!projectId || !message) {
     return new Response(JSON.stringify({ error: 'Missing required fields' }), { status: 400 })
   }
 
-  // Default user UUID for single-user mode
-  const USER_UUID = '00000000-0000-0000-0000-000000000002'
-  const SYSTEM_UUID = '00000000-0000-0000-0000-000000000099'
+  // Resolve model alias
+  const modelKey = MODEL_ALIASES[selectedModel] || selectedModel
+  const config = MODEL_CONFIG[modelKey]
+
+  if (!config) {
+    return new Response(JSON.stringify({ error: `Unknown model: ${selectedModel}` }), { status: 400 })
+  }
+
+  if (!config.apiKey) {
+    return new Response(JSON.stringify({ 
+      error: `API key not configured for ${config.provider}`,
+      hint: `Set ${config.provider.toUpperCase()}_API_KEY in environment`
+    }), { status: 500 })
+  }
 
   // Save user message
   let userMessage
@@ -54,40 +204,52 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: 'Failed to save message' }), { status: 500 })
   }
 
+  // Demo mode fallback
+  if (DEMO_MODE && !config.apiKey) {
+    const mockResponse = MOCK_RESPONSES[Math.floor(Math.random() * MOCK_RESPONSES.length)]
+    
+    const { data: aiMessage } = await supabase
+      .from('messages')
+      .insert({
+        project_id: projectId,
+        user_id: SYSTEM_UUID,
+        role: 'assistant',
+        content: mockResponse + '\n\n_Demo mode - API key not configured_',
+        type: 'text',
+      })
+      .select()
+      .single()
+
+    return new Response(JSON.stringify({
+      userMessage,
+      aiMessage,
+    }))
+  }
+
   try {
-    // Build context messages for Gateway
+    // Build context messages
     const contextMessages = context.slice(-10).map((msg: any) => ({
       role: msg.role === 'assistant' ? 'assistant' : 'user',
       content: msg.content,
     }))
 
-    // Call OpenClaw Gateway /v1/chat/completions with streaming
-    const aiResponse = await fetch(`${OPENCLAW_URL}/v1/chat/completions`, {
+    const requestBody = buildProviderRequest(config.provider, config.modelId, contextMessages, true)
+    const headers = buildProviderHeaders(config.provider, config.apiKey)
+
+    // Call AI provider API with streaming
+    const aiResponse = await fetch(config.apiUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENCLAW_TOKEN}`,
-        'x-openclaw-agent-id': 'main',
-      },
-      body: JSON.stringify({
-        model: gatewayModel,
-        messages: [
-          { role: 'system', content: 'This message is from the Master Studio Dashboard web interface. The Dashboard has an iframe preview panel — when you produce HTML/CSS/JS code, the user can see it in the Workspace > Preview tab. Do not search for browser, canvas, or node access — just produce code and write it as ```html code blocks. The user will see it in the preview.\n\nWhen user discusses project milestones or process changes, include a JSON block at the end of your response: ```milestone-update\n{action, milestoneTitle, detail}\n``` so the dashboard can sync.' },
-          ...contextMessages,
-          { role: 'user', content: message },
-        ],
-        user: session.user.id || 'dashboard-user',
-        stream: true,
-      }),
+      headers,
+      body: JSON.stringify(requestBody),
     })
 
     if (!aiResponse.ok) {
       const errBody = await aiResponse.text()
-      console.error('Gateway error:', aiResponse.status, errBody)
-      throw new Error(`Gateway error: ${aiResponse.status}`)
+      console.error('AI provider error:', aiResponse.status, errBody)
+      throw new Error(`Provider error: ${aiResponse.status}`)
     }
 
-    // Get AI message ID from database first (for reference)
+    // Create placeholder for AI message
     const { data: aiMessagePlaceholder, error: placeholderError } = await supabase
       .from('messages')
       .insert({
@@ -96,6 +258,7 @@ export async function POST(req: NextRequest) {
         role: 'assistant',
         content: '',
         type: 'text',
+        model: modelKey,
       })
       .select()
       .single()
@@ -104,130 +267,60 @@ export async function POST(req: NextRequest) {
 
     const encoder = new TextEncoder()
     const messageId = aiMessagePlaceholder.id
-    let isClosed = false // Prevent multiple close() calls
 
     // Create stream
-    const stream = new ReadableStream({
+    const responseStream = new ReadableStream({
       async start(controller) {
         // Send user message first
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'user_message', message: userMessage })}\n\n`))
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'user_message', message: userMessage })}
+
+`))
         
         // Send AI message ID
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'ai_id', messageId })}\n\n`))
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'ai_id', messageId })}
+
+`))
 
         if (!aiResponse.body) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', error: 'No response body' })}\n\n`))
-          if (!isClosed) {
-            isClosed = true
-            controller.close()
-          }
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', error: 'No response body' })}
+
+`))
+          controller.close()
           return
         }
 
         const reader = aiResponse.body.getReader()
         let fullContent = ''
-        let buffer = '' // Buffer for incomplete SSE events
+        let buffer = ''
 
         try {
           while (true) {
             const { done, value } = await reader.read()
             if (done) break
 
-            // Append new chunk to buffer
             buffer += new TextDecoder().decode(value)
-            
-            // Split on double newlines (SSE event delimiter)
-            const events = buffer.split('\n\n')
-            
-            // Keep the last item in buffer (could be incomplete)
-            buffer = events.pop() || ''
-            
-            // Process complete events
-            for (const event of events) {
-              const lines = event.split('\n')
-              
-              for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                  const data = line.slice(6)
-                  
-                  if (data === '[DONE]') {
-                    // Stream complete, update database with full content
-                    await supabase
-                      .from('messages')
-                      .update({ content: fullContent })
-                      .eq('id', messageId)
-                    
-                    if (!isClosed) {
-                      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`))
-                      isClosed = true
-                      controller.close()
-                    }
-                    return
-                  }
-
-                  try {
-                    const parsed = JSON.parse(data)
-                    const delta = parsed.choices?.[0]?.delta?.content
-                    
-                    if (delta) {
-                      fullContent += delta
-                      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'chunk', content: delta })}\n\n`))
-                    }
-                  } catch (e) {
-                    // Ignore parse errors for incomplete chunks
-                  }
-                }
-              }
-            }
-          }
-          
-          // Process any remaining data in buffer when stream ends
-          if (buffer.trim()) {
             const lines = buffer.split('\n')
+            buffer = lines.pop() || ''
+
             for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                const data = line.slice(6)
-                if (data === '[DONE]') {
-                  await supabase
-                    .from('messages')
-                    .update({ content: fullContent })
-                    .eq('id', messageId)
-                  if (!isClosed) {
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`))
-                    isClosed = true
-                    controller.close()
-                  }
-                  return
-                }
-                try {
-                  const parsed = JSON.parse(data)
-                  const delta = parsed.choices?.[0]?.delta?.content
-                  if (delta) {
-                    fullContent += delta
-                  }
-                } catch (e) {
-                  // Ignore parse errors
+              const trimmedLine = line.trim()
+              if (!trimmedLine) continue
+
+              // Handle SSE format
+              if (trimmedLine.startsWith('data: ')) {
+                const content = parseStreamChunk(config.provider, trimmedLine)
+                
+                if (content !== null) {
+                  fullContent += content
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'chunk', content })}
+
+`))
                 }
               }
             }
           }
           
-          // Stream ended normally - save final content
-          await supabase
-            .from('messages')
-            .update({ content: fullContent })
-            .eq('id', messageId)
-          
-          if (!isClosed) {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`))
-            isClosed = true
-            controller.close()
-          }
-          
-        } catch (err) {
-          console.error('Stream error:', err)
-          
-          // Save partial content on error/abort
+          // Stream ended - save final content
           if (fullContent) {
             await supabase
               .from('messages')
@@ -235,16 +328,31 @@ export async function POST(req: NextRequest) {
               .eq('id', messageId)
           }
           
-          if (!isClosed) {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', error: 'Stream interrupted' })}\n\n`))
-            isClosed = true
-            controller.close()
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done' })}
+
+`))
+          controller.close()
+          
+        } catch (err) {
+          console.error('Stream error:', err)
+          
+          // Save partial content on error
+          if (fullContent) {
+            await supabase
+              .from('messages')
+              .update({ content: fullContent })
+              .eq('id', messageId)
           }
+          
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', error: 'Stream interrupted' })}
+
+`))
+          controller.close()
         }
       },
     })
 
-    return new Response(stream, {
+    return new Response(responseStream, {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',

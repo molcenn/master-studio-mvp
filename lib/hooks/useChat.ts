@@ -29,8 +29,6 @@ export function useChat({ projectId, model }: UseChatOptions) {
 
   // Fetch messages on mount
   useEffect(() => {
-    if (!session) return
-
     const fetchMessages = async () => {
       try {
         const res = await fetch(`/api/chat?projectId=${projectId}`)
@@ -44,11 +42,11 @@ export function useChat({ projectId, model }: UseChatOptions) {
     }
 
     fetchMessages()
-  }, [projectId, session])
+  }, [projectId])
 
   // Send message to AI with streaming
   const sendMessage = useCallback(async (content: string, type: 'text' | 'file' | 'audio' = 'text', fileInfo?: any) => {
-    if (!session || !content.trim()) return
+    if (!content.trim()) return
 
     setIsLoading(true)
     setStreamingContent('')
@@ -62,7 +60,7 @@ export function useChat({ projectId, model }: UseChatOptions) {
       const tempUserMessage: Message = {
         id: 'temp-' + Date.now(),
         project_id: projectId,
-        user_id: session.user.id,
+        user_id: session?.user?.id || 'local',
         role: 'user',
         content,
         type,

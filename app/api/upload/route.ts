@@ -66,7 +66,20 @@ export async function POST(req: NextRequest) {
       .from('files')
       .getPublicUrl(key)
 
+    // Return complete file data for localStorage sync
+    const fileData = {
+      id: `file-${Date.now()}`,
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      created_at: new Date().toISOString(),
+      url: publicUrl,
+      projectId: projectId,
+      key: key,
+    }
+
     return NextResponse.json({
+      file: fileData,
       fileUrl: publicUrl,
       key,
     })

@@ -5,7 +5,7 @@ import PlanView from './PlanView'
 import SettingsPanel from './SettingsPanel'
 import DeleteConfirmationModal from './DeleteConfirmationModal'
 import Calendar from './Calendar'
-import { getProjects, getProject, getStats, getFiles as getFilesLS, StoredFile } from '@/lib/localStorage'
+import { getProjects, getProject, getStats, getFiles as getFilesLS, createFile, StoredFile } from '@/lib/localStorage'
 
 interface Project {
   id: string
@@ -444,6 +444,17 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
       })
 
       if (res.ok) {
+        const data = await res.json()
+        // Save to localStorage for file list sync
+        if (data.file) {
+          createFile({
+            name: data.file.name,
+            size: data.file.size,
+            type: data.file.type,
+            url: data.file.url,
+            projectId: data.file.projectId,
+          })
+        }
         fetchFiles() // Refresh file list
       } else {
         console.error('Upload failed')

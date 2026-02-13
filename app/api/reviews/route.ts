@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { join } from 'path'
 
 interface Review {
   id: string
@@ -12,8 +14,9 @@ interface Review {
   diff: string | null
 }
 
-// Mock data - gerçekçi örnek veriler
-let mockReviews: Review[] = [
+const REVIEWS_FILE = join(process.cwd(), '.reviews.json')
+
+const DEFAULT_REVIEWS: Review[] = [
   {
     id: '1',
     title: 'Dashboard layout refactoring',
@@ -23,8 +26,7 @@ let mockReviews: Review[] = [
     status: 'pending',
     type: 'code',
     created_at: new Date().toISOString(),
-    diff: `- gridTemplateColumns: "260px 1fr 380px"
-+ gridTemplateColumns: \`260px 1fr 4px \${chatWidth}px\``
+    diff: `- gridTemplateColumns: "260px 1fr 380px"\n+ gridTemplateColumns: \`260px 1fr 4px \${chatWidth}px\``
   },
   {
     id: '2',
@@ -57,23 +59,43 @@ let mockReviews: Review[] = [
     status: 'rejected',
     type: 'code',
     created_at: new Date(Date.now() - 10800000).toISOString(),
-    diff: `- if (user) return true
-+ if (user && user.token === validToken) return true`
+    diff: `- if (user) return true\n+ if (user && user.token === validToken) return true`
   }
 ]
+
+function loadReviews(): Review[] {
+  try {
+    if (existsSync(REVIEWS_FILE)) {
+      const data = readFileSync(REVIEWS_FILE, 'utf-8')
+      return JSON.parse(data)
+    }
+  } catch (e) {
+    console.error('Error loading reviews:', e)
+  }
+  // İlk kez: default reviews'ı dosyaya yaz
+  saveReviews(DEFAULT_REVIEWS)
+  return DEFAULT_REVIEWS
+}
+
+function saveReviews(reviews: Review[]) {
+  try {
+    writeFileSync(REVIEWS_FILE, JSON.stringify(reviews, null, 2), 'utf-8')
+  } catch (e) {
+    console.error('Error saving reviews:', e)
+  }
+}
 
 // GET: Tüm review'ları getir
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const status = searchParams.get('status')
   
-  let reviews = mockReviews
+  let reviews = loadReviews()
   
   if (status && status !== 'all') {
-    reviews = mockReviews.filter(r => r.status === status)
+    reviews = reviews.filter(r => r.status === status)
   }
   
-  // Sırala: önce pending, sonra created_at'a göre
   reviews.sort((a, b) => {
     if (a.status === 'pending' && b.status !== 'pending') return -1
     if (a.status !== 'pending' && b.status === 'pending') return 1
@@ -87,6 +109,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
+    const reviews = loadReviews()
     
     const newReview: Review = {
       id: Date.now().toString(),
@@ -100,7 +123,8 @@ export async function POST(request: NextRequest) {
       diff: body.diff || null
     }
     
-    mockReviews.unshift(newReview)
+    reviews.unshift(newReview)
+    saveReviews(reviews)
     
     return NextResponse.json({ review: newReview }, { status: 201 })
   } catch (error) {
@@ -108,7 +132,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PATCH: Review durumunu güncelle (approved/rejected/pending)
+// PATCH: Review durumunu güncelle
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json()
@@ -118,15 +142,17 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid id or status' }, { status: 400 })
     }
     
-    const reviewIndex = mockReviews.findIndex(r => r.id === id)
+    const reviews = loadReviews()
+    const reviewIndex = reviews.findIndex(r => r.id === id)
     
     if (reviewIndex === -1) {
       return NextResponse.json({ error: 'Review not found' }, { status: 404 })
     }
     
-    mockReviews[reviewIndex].status = status as 'pending' | 'approved' | 'rejected'
+    reviews[reviewIndex].status = status as 'pending' | 'approved' | 'rejected'
+    saveReviews(reviews)
     
-    return NextResponse.json({ review: mockReviews[reviewIndex] })
+    return NextResponse.json({ review: reviews[reviewIndex] })
   } catch (error) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }

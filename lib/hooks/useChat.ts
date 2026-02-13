@@ -219,7 +219,9 @@ export function useChat({ projectId, model }: UseChatOptions) {
 
   // Upload file
   const uploadFile = useCallback(async (file: File) => {
-    if (!session) return
+    // Dev mode'da session kontrolünü atla
+    const isDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    if (!isDev && !session) return
 
     setIsLoading(true)
     setError(null)

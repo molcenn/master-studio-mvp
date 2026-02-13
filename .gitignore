@@ -35,3 +35,6 @@ local.db
 
 # Vercel
 .vercel
+
+# Data files
+.reviews.json

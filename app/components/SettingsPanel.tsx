@@ -78,12 +78,41 @@ export default function SettingsPanel() {
     if (savedSettings) {
       try {
         const parsed = JSON.parse(savedSettings)
-        setSettings({ ...DEFAULT_SETTINGS, ...parsed })
+        const mergedSettings = { ...DEFAULT_SETTINGS, ...parsed }
+        setSettings(mergedSettings)
+        // Apply theme on load
+        applyTheme(mergedSettings.theme)
       } catch (e) {
         console.error('Error parsing settings:', e)
       }
     }
   }, [])
+
+  // Auto-save settings when they change (if autoSave is enabled)
+  useEffect(() => {
+    if (settings.autoSave) {
+      localStorage.setItem('master-studio-settings', JSON.stringify(settings))
+    }
+  }, [settings])
+
+  const applyTheme = (theme: Theme) => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark')
+      document.documentElement.classList.remove('light')
+    } else if (theme === 'light') {
+      document.documentElement.classList.add('light')
+      document.documentElement.classList.remove('dark')
+    } else {
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+      if (prefersDark) {
+        document.documentElement.classList.add('dark')
+        document.documentElement.classList.remove('light')
+      } else {
+        document.documentElement.classList.add('light')
+        document.documentElement.classList.remove('dark')
+      }
+    }
+  }
 
   const saveSettings = () => {
     localStorage.setItem('master-studio-settings', JSON.stringify(settings))
@@ -104,22 +133,7 @@ export default function SettingsPanel() {
 
   const handleThemeChange = (theme: Theme) => {
     updateSetting('theme', theme)
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark')
-      document.documentElement.classList.remove('light')
-    } else if (theme === 'light') {
-      document.documentElement.classList.add('light')
-      document.documentElement.classList.remove('dark')
-    } else {
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-      if (prefersDark) {
-        document.documentElement.classList.add('dark')
-        document.documentElement.classList.remove('light')
-      } else {
-        document.documentElement.classList.add('light')
-        document.documentElement.classList.remove('dark')
-      }
-    }
+    applyTheme(theme)
   }
 
   const TabButton = ({ id, label, icon }: { id: typeof activeTab; label: string; icon: React.ReactNode }) => (

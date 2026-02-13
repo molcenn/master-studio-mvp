@@ -24,6 +24,8 @@ interface SidebarProps {
 
 const PROJECT_COLORS = ['#00d4ff', '#a855f7', '#ec4899', '#22c55e', '#f59e0b', '#ef4444', '#3b82f6']
 
+const STORAGE_KEY = 'master-studio-projects'
+
 // Skills data removed
 
 export default function Sidebar({ activeProject, setActiveProject, user, activeView, setActiveView }: SidebarProps) {
@@ -33,19 +35,54 @@ export default function Sidebar({ activeProject, setActiveProject, user, activeV
   const [newProjectName, setNewProjectName] = useState('')
   const [isCreating, setIsCreating] = useState(false)
 
-  // Fetch projects from API
+  // Load projects from localStorage + API
   useEffect(() => {
     fetchProjects()
   }, [])
 
+  // Save projects to localStorage whenever they change
+  useEffect(() => {
+    if (projects.length > 0) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(projects))
+    }
+  }, [projects])
+
   const fetchProjects = async () => {
     try {
+      // First, try to load from localStorage
+      const stored = localStorage.getItem(STORAGE_KEY)
+      let localProjects: Project[] = []
+      if (stored) {
+        try {
+          localProjects = JSON.parse(stored)
+        } catch (e) {
+          console.error('Error parsing stored projects:', e)
+        }
+      }
+
+      // Then fetch from API
       const res = await fetch('/api/projects')
       if (!res.ok) throw new Error('Failed to fetch projects')
       const data = await res.json()
-      setProjects(data.projects || [])
+      const apiProjects = data.projects || []
+
+      // Merge local and API projects (local takes precedence for same IDs)
+      const apiProjectIds = new Set(apiProjects.map((p: Project) => p.id))
+      const uniqueLocalProjects = localProjects.filter((p: Project) => !apiProjectIds.has(p.id))
+      const mergedProjects = [...apiProjects, ...uniqueLocalProjects]
+
+      setProjects(mergedProjects)
     } catch (err) {
       console.error('Error fetching projects:', err)
+      // Fallback to localStorage only
+      const stored = localStorage.getItem(STORAGE_KEY)
+      if (stored) {
+        try {
+          setProjects(JSON.parse(stored))
+        } catch (e) {
+          console.error('Error parsing stored projects:', e)
+        }
+      }
     } finally {
       setIsLoading(false)
     }
@@ -56,6 +93,7 @@ export default function Sidebar({ activeProject, setActiveProject, user, activeV
     
     setIsCreating(true)
     try {
+      // Try API first
       const res = await fetch('/api/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -65,13 +103,25 @@ export default function Sidebar({ activeProject, setActiveProject, user, activeV
       if (!res.ok) throw new Error('Failed to create project')
       
       const data = await res.json()
-      setProjects([...projects, data.project])
-      setActiveProject(data.project.id)
+      const newProject = data.project
+
+      // Add to local state (will be saved to localStorage via useEffect)
+      setProjects(prev => [...prev, newProject])
+      setActiveProject(newProject.id)
       setNewProjectName('')
       setShowNewProjectModal(false)
     } catch (err) {
       console.error('Error creating project:', err)
-      alert('Failed to create project')
+      // Fallback: create locally
+      const newProject: Project = {
+        id: `local-${Date.now()}`,
+        name: newProjectName.trim(),
+        created_at: new Date().toISOString()
+      }
+      setProjects(prev => [...prev, newProject])
+      setActiveProject(newProject.id)
+      setNewProjectName('')
+      setShowNewProjectModal(false)
     } finally {
       setIsCreating(false)
     }

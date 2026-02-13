@@ -5,10 +5,19 @@ import { authOptions } from '@/lib/auth'
 const OPENCLAW_URL = process.env.OPENCLAW_URL || 'http://localhost:18789'
 const OPENCLAW_TOKEN = process.env.OPENCLAW_TOKEN
 
+const isDevMode = () => {
+  return process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
+}
+
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // Dev mode'da auth kontrolünü atla
+  if (isDevMode()) {
+    // Dev mode: devam et
+  } else {
+    const session = await getServerSession(authOptions)
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
   }
 
   const { task, model, label } = await req.json()

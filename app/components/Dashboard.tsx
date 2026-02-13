@@ -16,7 +16,7 @@ export default function Dashboard() {
   const [chatWidth, setChatWidth] = useState(380)
 
   // Dev mode: skip auth for local testing
-  const isDev = process.env.NODE_ENV === 'development'
+  const isDev = process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
   
   if (!isDev && status === 'loading') {
     return (

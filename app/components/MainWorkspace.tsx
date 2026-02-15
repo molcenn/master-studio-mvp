@@ -5,12 +5,15 @@ import PlanView from './PlanView'
 import SettingsPanel from './SettingsPanel'
 import DeleteConfirmationModal from './DeleteConfirmationModal'
 import Calendar from './Calendar'
-import { getProjects, getProject, getStats, getFiles as getFilesLS, createFile, StoredFile } from '@/lib/localStorage'
+import { getProjects, getProject, getStats, getFiles as getFilesLS, createFile, StoredFile, getPendingReviews, updateReviewStatus as updateReviewStatusLS, Review as ReviewType, updateProjectStatus as updateProjectStatusLS, updateProjectProgress as updateProjectProgressLS, ProjectStatus } from '@/lib/localStorage'
 
 interface Project {
   id: string
   name: string
+  description?: string
   created_at: string
+  status: ProjectStatus
+  progress: number
   messages?: { count: number }[]
 }
 
@@ -96,25 +99,21 @@ function formatFileType(type: string): string {
   return 'File'
 }
 
-function getStatusFromIndex(index: number) {
-  return STATUS_VARIANTS[index % STATUS_VARIANTS.length]
-}
-
-function getStatusClass(status: string) {
+function getProjectStatusLabel(status: ProjectStatus): string {
   switch (status) {
-    case 'Active': return 'status-active'
-    case 'Review': return 'status-review'
-    case 'Planning': return 'status-planning'
-    default: return 'status-active'
+    case 'active': return 'Active'
+    case 'review': return 'Review'
+    case 'planning': return 'Planning'
+    default: return 'Planning'
   }
 }
 
-function getProgressFromStatus(status: string) {
+function getStatusClass(status: ProjectStatus): string {
   switch (status) {
-    case 'Active': return 75
-    case 'Review': return 90
-    case 'Planning': return 25
-    default: return 50
+    case 'active': return 'status-active'
+    case 'review': return 'status-review'
+    case 'planning': return 'status-planning'
+    default: return 'status-planning'
   }
 }
 
@@ -188,6 +187,9 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
   const [reviewsLoading, setReviewsLoading] = useState(false)
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>('all')
 
+  // Dashboard pending reviews (from localStorage)
+  const [dashboardReviews, setDashboardReviews] = useState<ReviewType[]>([])
+
   // Milestones state
   const [milestones, setMilestones] = useState<Milestone[]>([])
   const [showMilestoneForm, setShowMilestoneForm] = useState(false)
@@ -254,13 +256,28 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
       // Load from localStorage
       const storedProjects = getProjects()
       const storedStats = getStats()
+      const pendingReviews = getPendingReviews()
       
       setStats(storedStats)
       setProjects(storedProjects.slice(0, 6))
+      setDashboardReviews(pendingReviews)
     } catch (err) {
       console.error('Error fetching dashboard data:', err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Handle review approve/reject on dashboard
+  const handleDashboardReviewAction = (id: string, status: 'approved' | 'rejected') => {
+    try {
+      updateReviewStatusLS(id, status)
+      // Refresh both reviews and stats
+      const updatedPending = getPendingReviews()
+      setDashboardReviews(updatedPending)
+      setStats(getStats())
+    } catch (err) {
+      console.error('Error updating review status:', err)
     }
   }
 
@@ -723,7 +740,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
           )}
         </div>
         <div className="toolbar-btns">
-          <button className="toolbar-btn" title="Search (⌘K)">
+          <button className="toolbar-btn" title="Search — Coming soon" disabled style={{ opacity: 0.4, cursor: 'not-allowed' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="11" cy="11" r="8"/>
               <line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -750,7 +767,13 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
               <>
                 {/* Welcome */}
                 <div className="welcome-section">
-                  <div className="welcome-greeting">Good morning, <span>Murat</span> ✦</div>
+                  <div className="welcome-greeting">{(() => {
+                    const h = new Date().getHours()
+                    if (h >= 5 && h < 12) return 'Good morning'
+                    if (h >= 12 && h < 18) return 'Good afternoon'
+                    if (h >= 18 && h < 22) return 'Good evening'
+                    return 'Good night'
+                  })()}, <span>Murat</span> ✦</div>
                   <div className="welcome-summary">
                     {stats?.projectCount || 0} active projects · {stats?.activeAgents || 0} agents working · {stats?.pendingReviews || 0} pending reviews
                   </div>
@@ -779,84 +802,351 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                 {/* Active Projects */}
                 <div className="section-header">
                   <span className="section-title">Active Projects</span>
-                  <button className="section-action">View All →</button>
+                  <button className="section-action" onClick={() => setActiveView('workspace')}>View All →</button>
                 </div>
-                <div className="project-cards">
-                  {projects.slice(0, 3).map((project, index) => {
-                    const status = getStatusFromIndex(index)
-                    const progress = getProgressFromStatus(status)
-                    const messageCount = project.messages?.[0]?.count || 0
+                <div className="project-cards-enhanced">
+                  {projects.slice(0, 4).map((project, index) => {
+                    const status = project.status || 'planning'
+                    const progress = typeof project.progress === 'number' ? project.progress : 0
+                    const description = project.description || 'No description available'
+                    
+                    // Mock team members for avatar display
+                    const teamMembers = [
+                      { name: 'Murat', color: '#00d4ff' },
+                      { name: 'Alex', color: '#a855f7' },
+                      { name: 'Sam', color: '#22c55e' },
+                    ].slice(0, Math.floor(Math.random() * 2) + 2)
+                    
+                    // Status badge styling
+                    const statusConfig = {
+                      active: { bg: 'linear-gradient(135deg, #22c55e, #16a34a)', label: 'Active', icon: '●' },
+                      review: { bg: 'linear-gradient(135deg, #f59e0b, #d97706)', label: 'Review', icon: '◐' },
+                      planning: { bg: 'linear-gradient(135deg, #6366f1, #4f46e5)', label: 'Planning', icon: '○' }
+                    }
+                    const currentStatus = statusConfig[status] || statusConfig.planning
+                    
                     return (
                       <div 
                         key={project.id} 
-                        className={`project-card ${activeProject === project.id ? 'active' : ''}`}
+                        className={`project-card-glass ${activeProject === project.id ? 'active' : ''}`}
                         onClick={() => {
                           setActiveProject(project.id)
                           setActiveView('workspace')
                         }}
                       >
-                        <div className="project-card-header">
-                          <div>
-                            <div className="project-card-name">{project.name}</div>
-                            <div className="project-card-client">{messageCount} messages</div>
+                        {/* Card Header */}
+                        <div className="project-card-glass-header">
+                          <div className="project-card-glass-title-row">
+                            <h3 className="project-card-glass-name">{project.name}</h3>
+                            <span 
+                              className="project-card-glass-status"
+                              style={{ background: currentStatus.bg }}
+                            >
+                              {currentStatus.icon} {currentStatus.label}
+                            </span>
                           </div>
-                          <span className={`project-card-status ${getStatusClass(status)}`}>{status}</span>
+                          <p className="project-card-glass-desc">{description}</p>
                         </div>
-                        <div className="project-card-progress">
-                          <div className="progress-bar-bg">
-                            <div className="progress-bar-fill" style={{ width: `${progress}%` }}></div>
+                        
+                        {/* Progress Section */}
+                        <div className="project-card-glass-progress">
+                          <div className="progress-header">
+                            <span className="progress-label-text">Progress</span>
+                            <span className="progress-value">{progress}%</span>
                           </div>
-                          <div className="progress-label">
-                            <span className="progress-text">Progress</span>
-                            <span className="progress-text">{progress}%</span>
+                          <div className="progress-bar-glass">
+                            <div 
+                              className="progress-bar-glass-fill"
+                              style={{ 
+                                width: `${progress}%`,
+                                background: progress > 75 
+                                  ? 'linear-gradient(90deg, #22c55e, #16a34a)' 
+                                  : progress > 50 
+                                    ? 'linear-gradient(90deg, #00d4ff, #a855f7)'
+                                    : 'linear-gradient(90deg, #6366f1, #4f46e5)'
+                              }}
+                            />
                           </div>
                         </div>
-                        <div className="project-card-footer">
-                          <div className="agent-avatars">
-                            <div className="agent-avatar cyan" style={{ background: getProjectColor(index) }}>
-                              {getInitials(project.name)}
-                            </div>
+                        
+                        {/* Card Footer */}
+                        <div className="project-card-glass-footer">
+                          {/* Team Avatars */}
+                          <div className="team-avatars">
+                            {teamMembers.slice(0, 3).map((member, i) => (
+                              <div 
+                                key={i} 
+                                className="team-avatar"
+                                style={{ 
+                                  background: member.color,
+                                  transform: `translateX(-${i * 6}px)`,
+                                  zIndex: 3 - i
+                                }}
+                                title={member.name}
+                              >
+                                {member.name[0]}
+                              </div>
+                            ))}
+                            {teamMembers.length > 3 && (
+                              <div 
+                                className="team-avatar team-avatar-more"
+                                style={{ transform: `translateX(-${3 * 6}px)`, zIndex: 0 }}
+                              >
+                                +{teamMembers.length - 3}
+                              </div>
+                            )}
                           </div>
-                          <span className="project-card-time">{timeAgo(project.created_at)}</span>
+                          
+                          {/* Last Activity */}
+                          <div className="last-activity">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <circle cx="12" cy="12" r="10"/>
+                              <polyline points="12 6 12 12 16 14"/>
+                            </svg>
+                            <span>{timeAgo(project.created_at)}</span>
+                          </div>
                         </div>
+                        
+                        {/* Hover Gradient Overlay */}
+                        <div className="project-card-glass-gradient" />
                       </div>
                     )
                   })}
                 </div>
 
-                {/* Review Queue */}
-                <div className="section-header">
-                  <span className="section-title">Pending Reviews</span>
-                  <button className="section-action">View All →</button>
-                </div>
-                <div className="review-list">
-                  <div className="review-item">
-                    <div className="review-icon code">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="2">
-                        <polyline points="16 18 22 12 16 6"/>
-                        <polyline points="8 6 2 12 8 18"/>
-                      </svg>
+                {/* Two Column Grid: Active Projects | Pending Reviews */}
+                <div className="dashboard-two-col">
+                  {/* Left Column: Active Projects */}
+                  <div className="dashboard-col">
+                    <div className="section-header">
+                      <span className="section-title">Active Projects</span>
+                      <button className="section-action" onClick={() => setActiveView('workspace')}>View All →</button>
                     </div>
-                    <div className="review-info">
-                      <div className="review-title">API endpoint refactoring</div>
-                      <div className="review-meta">coding-agent · Agent Dashboard · 10 min ago</div>
+                    <div className="project-cards-enhanced">
+                      {projects.slice(0, 4).map((project, index) => {
+                        const status = project.status || 'planning'
+                        const progress = typeof project.progress === 'number' ? project.progress : 0
+                        const description = project.description || 'No description available'
+                        
+                        // Mock team members for avatar display
+                        const teamMembers = [
+                          { name: 'Murat', color: '#00d4ff' },
+                          { name: 'Alex', color: '#a855f7' },
+                          { name: 'Sam', color: '#22c55e' },
+                        ].slice(0, Math.floor(Math.random() * 2) + 2)
+                        
+                        // Status badge styling
+                        const statusConfig = {
+                          active: { bg: 'linear-gradient(135deg, #22c55e, #16a34a)', label: 'Active', icon: '●' },
+                          review: { bg: 'linear-gradient(135deg, #f59e0b, #d97706)', label: 'Review', icon: '◐' },
+                          planning: { bg: 'linear-gradient(135deg, #6366f1, #4f46e5)', label: 'Planning', icon: '○' }
+                        }
+                        const currentStatus = statusConfig[status] || statusConfig.planning
+                        
+                        return (
+                          <div 
+                            key={project.id} 
+                            className={`project-card-glass ${activeProject === project.id ? 'active' : ''}`}
+                            onClick={() => {
+                              setActiveProject(project.id)
+                              setActiveView('workspace')
+                            }}
+                          >
+                            {/* Card Header */}
+                            <div className="project-card-glass-header">
+                              <div className="project-card-glass-title-row">
+                                <h3 className="project-card-glass-name">{project.name}</h3>
+                                <span 
+                                  className="project-card-glass-status"
+                                  style={{ background: currentStatus.bg }}
+                                >
+                                  {currentStatus.icon} {currentStatus.label}
+                                </span>
+                              </div>
+                              <p className="project-card-glass-desc">{description}</p>
+                            </div>
+                            
+                            {/* Progress Section */}
+                            <div className="project-card-glass-progress">
+                              <div className="progress-header">
+                                <span className="progress-label-text">Progress</span>
+                                <span className="progress-value">{progress}%</span>
+                              </div>
+                              <div className="progress-bar-glass">
+                                <div 
+                                  className="progress-bar-glass-fill"
+                                  style={{ 
+                                    width: `${progress}%`,
+                                    background: progress > 75 
+                                      ? 'linear-gradient(90deg, #22c55e, #16a34a)' 
+                                      : progress > 50 
+                                        ? 'linear-gradient(90deg, #00d4ff, #a855f7)'
+                                        : 'linear-gradient(90deg, #6366f1, #4f46e5)'
+                                  }}
+                                />
+                              </div>
+                            </div>
+                            
+                            {/* Card Footer */}
+                            <div className="project-card-glass-footer">
+                              {/* Team Avatars */}
+                              <div className="team-avatars">
+                                {teamMembers.slice(0, 3).map((member, i) => (
+                                  <div 
+                                    key={i} 
+                                    className="team-avatar"
+                                    style={{ 
+                                      background: member.color,
+                                      transform: `translateX(-${i * 6}px)`,
+                                      zIndex: 3 - i
+                                    }}
+                                    title={member.name}
+                                  >
+                                    {member.name[0]}
+                                  </div>
+                                ))}
+                                {teamMembers.length > 3 && (
+                                  <div 
+                                    className="team-avatar team-avatar-more"
+                                    style={{ transform: `translateX(-${3 * 6}px)`, zIndex: 0 }}
+                                  >
+                                    +{teamMembers.length - 3}
+                                  </div>
+                                )}
+                              </div>
+                              
+                              {/* Last Activity */}
+                              <div className="last-activity">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <circle cx="12" cy="12" r="10"/>
+                                  <polyline points="12 6 12 12 16 14"/>
+                                </svg>
+                                <span>{timeAgo(project.created_at)}</span>
+                              </div>
+                            </div>
+                            
+                            {/* Hover Gradient Overlay */}
+                            <div className="project-card-glass-gradient" />
+                          </div>
+                        )
+                      })}
                     </div>
-                    <span className="review-priority priority-urgent">Urgent</span>
                   </div>
 
-                  <div className="review-item">
-                    <div className="review-icon asset">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00d4ff" strokeWidth="2">
-                        <rect x="3" y="3" width="18" height="18" rx="2"/>
-                        <circle cx="8.5" cy="8.5" r="1.5"/>
-                        <path d="M21 15l-5-5L5 21"/>
-                      </svg>
+                  {/* Right Column: Pending Reviews */}
+                  <div className="dashboard-col">
+                    <div className="section-header">
+                      <span className="section-title">Pending Review</span>
+                      <span className="section-count">{dashboardReviews.length}</span>
                     </div>
-                    <div className="review-info">
-                      <div className="review-title">Hero image generation v3</div>
-                      <div className="review-meta">dalle-agent · Launch Video · 1 hour ago</div>
+                    <div className="review-cards-grid">
+                      {dashboardReviews.length === 0 ? (
+                        <div className="review-empty-state">
+                          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--accent-green)" strokeWidth="1.5">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                            <polyline points="22 4 12 14.01 9 11.01"/>
+                          </svg>
+                          <div>All caught up!</div>
+                          <span>No pending reviews</span>
+                        </div>
+                      ) : (
+                        dashboardReviews.slice(0, 3).map((review) => {
+                          // Map type to badge style (code/design/content)
+                          const typeConfig = {
+                            code: { label: 'Code', color: '#a855f7', bg: 'rgba(168,85,247,0.15)', icon: (
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+                              </svg>
+                            )},
+                            asset: { label: 'Design', color: '#00d4ff', bg: 'rgba(0,212,255,0.15)', icon: (
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                                <circle cx="8.5" cy="8.5" r="1.5"/>
+                                <path d="M21 15l-5-5L5 21"/>
+                              </svg>
+                            )},
+                            document: { label: 'Content', color: '#22c55e', bg: 'rgba(34,197,94,0.15)', icon: (
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                              </svg>
+                            )}
+                          }
+                          const typeInfo = typeConfig[review.type]
+                          const agentInitials = getInitials(review.agentName)
+
+                          return (
+                            <div key={review.id} className="review-card-glass">
+                              {/* Card Header with Type Badge */}
+                              <div className="review-card-glass-header">
+                                <span 
+                                  className="review-type-badge"
+                                  style={{ 
+                                    background: typeInfo.bg, 
+                                    color: typeInfo.color,
+                                    border: `1px solid ${typeInfo.color}30`
+                                  }}
+                                >
+                                  {typeInfo.icon}
+                                  {typeInfo.label}
+                                </span>
+                                <span className="review-date">{timeAgo(review.createdAt)}</span>
+                              </div>
+                              
+                              {/* Title & Description */}
+                              <div className="review-card-glass-title">{review.title}</div>
+                              {review.description && (
+                                <div className="review-card-glass-desc">{review.description}</div>
+                              )}
+                              
+                              {/* Card Footer */}
+                              <div className="review-card-glass-footer">
+                                {/* Sender Info */}
+                                <div className="review-sender">
+                                  <div 
+                                    className="review-sender-avatar"
+                                    style={{ 
+                                      background: `linear-gradient(135deg, ${typeInfo.color}, ${typeInfo.color}99)` 
+                                    }}
+                                  >
+                                    {agentInitials}
+                                  </div>
+                                  <span className="review-sender-name">{review.agentName}</span>
+                                </div>
+                                
+                                {/* Action Buttons */}
+                                <div className="review-actions">
+                                  <button
+                                    className="review-btn approve"
+                                    onClick={() => handleDashboardReviewAction(review.id, 'approved')}
+                                    title="Approve"
+                                  >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                      <polyline points="20 6 9 17 4 12"/>
+                                    </svg>
+                                    Approve
+                                  </button>
+                                  <button
+                                    className="review-btn request-changes"
+                                    onClick={() => handleDashboardReviewAction(review.id, 'rejected')}
+                                    title="Request Changes"
+                                  >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                    </svg>
+                                    Request Changes
+                                  </button>
+                                </div>
+                              </div>
+                              
+                              {/* Hover Gradient Overlay */}
+                              <div className="review-card-glass-gradient" />
+                            </div>
+                          )
+                        })
+                      )}
                     </div>
-                    <span className="review-priority priority-normal">Normal</span>
                   </div>
                 </div>
               </>
@@ -1532,10 +1822,52 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
           font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
           flex-shrink: 0;
         }
+        .project-card-status-select {
+          font-size: 9px; padding: 3px 8px; border-radius: 10px;
+          font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+          flex-shrink: 0; border: none; outline: none; cursor: pointer;
+          appearance: none; -webkit-appearance: none; -moz-appearance: none;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+          background-repeat: no-repeat; background-position: right 6px center;
+          padding-right: 18px;
+        }
+        .project-card-status-select option {
+          background: #1a1a2e; color: #e0e0e0; font-size: 12px;
+          text-transform: none; letter-spacing: normal;
+        }
+        .project-card-status-select.status-active { background-color: rgba(34,197,94,0.15); color: var(--accent-green); }
+        .project-card-status-select.status-review { background-color: rgba(245,158,11,0.15); color: var(--accent-amber); }
+        .project-card-status-select.status-planning { background-color: rgba(59,130,246,0.15); color: var(--accent-blue); }
         .status-active { background: rgba(34,197,94,0.15); color: var(--accent-green); }
         .status-review { background: rgba(245,158,11,0.15); color: var(--accent-amber); }
         .status-planning { background: rgba(59,130,246,0.15); color: var(--accent-blue); }
-        .project-card-progress { margin-bottom: 12px; }
+        .project-card-progress { margin-bottom: 12px; position: relative; }
+        .progress-slider {
+          width: 100%; height: 4px; margin-top: 4px;
+          -webkit-appearance: none; appearance: none;
+          background: transparent; cursor: pointer;
+          opacity: 0; transition: opacity 0.2s ease;
+        }
+        .project-card:hover .progress-slider { opacity: 1; }
+        .progress-slider::-webkit-slider-thumb {
+          -webkit-appearance: none; appearance: none;
+          width: 12px; height: 12px; border-radius: 50%;
+          background: var(--accent-cyan); border: 2px solid #1a1a2e;
+          cursor: pointer; margin-top: -4px;
+        }
+        .progress-slider::-moz-range-thumb {
+          width: 12px; height: 12px; border-radius: 50%;
+          background: var(--accent-cyan); border: 2px solid #1a1a2e;
+          cursor: pointer;
+        }
+        .progress-slider::-webkit-slider-runnable-track {
+          height: 4px; border-radius: 2px;
+          background: rgba(255,255,255,0.06);
+        }
+        .progress-slider::-moz-range-track {
+          height: 4px; border-radius: 2px;
+          background: rgba(255,255,255,0.06);
+        }
         .progress-bar-bg { width: 100%; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.06); }
         .progress-bar-fill { height: 100%; border-radius: 2px; background: linear-gradient(90deg, var(--accent-cyan), var(--accent-purple)); transition: width 0.6s ease; }
         .progress-label { display: flex; justify-content: space-between; margin-top: 6px; }
@@ -1570,6 +1902,8 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
         .review-priority { font-size: 9px; padding: 2px 7px; border-radius: 8px; font-weight: 600; text-transform: uppercase; }
         .priority-urgent { background: rgba(239,68,68,0.15); color: var(--accent-red); }
         .priority-normal { background: rgba(245,158,11,0.15); color: var(--accent-amber); }
+        .priority-low { background: rgba(34,197,94,0.15); color: var(--accent-green); }
+        .review-icon.document { background: rgba(34,197,94,0.15); }
         @media (max-width: 1024px) {
           .project-cards { grid-template-columns: repeat(2, 1fr); }
         }

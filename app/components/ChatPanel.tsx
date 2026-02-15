@@ -1,6 +1,7 @@
 'use client'
 
 import { useChat } from '@/lib/hooks/useChat'
+import { incrementDailyMessageCount } from '@/lib/localStorage'
 import { useState, useRef, useEffect } from 'react'
 
 function escapeHtml(text: string): string {
@@ -84,13 +85,6 @@ function renderMarkdown(text: string, role: string = 'agent'): string {
       const fullCode = escapeHtml(code.trim())
       const lineCount = lines.length
       const id = 'code-' + Math.random().toString(36).substr(2, 9)
-      // Check if this message needs approval (contains approval keywords)
-      const needsApproval = text.includes('onay') || text.includes('Onay') || text.includes('approve') || text.includes('uygula') || text.includes('Uygula') || text.includes('eklensin mi') || text.includes('değiştirilsin mi') || text.includes('yapayım mı') || text.includes('uygun mu')
-      const approvalButtons = needsApproval ? `
-        <div class="code-card-actions">
-          <button class="code-card-approve" onclick="this.textContent='✓';this.style.opacity='0.6';this.disabled=true;this.parentElement.querySelector('.code-card-reject').style.display='none'">✓ Approve</button>
-          <button class="code-card-reject" onclick="this.textContent='✗';this.style.opacity='0.6';this.disabled=true;this.parentElement.querySelector('.code-card-approve').style.display='none'">✗ Reject</button>
-        </div>` : ''
       return `<div class="chat-code-card">
         <div class="chat-code-card-header">
           <span class="chat-code-lines">${lineCount} lines</span>
@@ -99,7 +93,6 @@ function renderMarkdown(text: string, role: string = 'agent'): string {
         <div class="chat-code-scroll">
           <pre class="chat-code-content" id="${id}"><code>${fullCode}</code></pre>
         </div>
-        ${approvalButtons}
       </div>`
     })
     // Inline code: `code` → <code>
@@ -420,6 +413,9 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
     const msg = input.trim()
     setInput('') // Clear immediately for better UX
 
+    // Increment daily message counter for stats
+    incrementDailyMessageCount()
+
     // If in agent chat mode (not main), send to agent
     if (activeAgentId !== 'main') {
       await sendAgentMessage(msg)
@@ -652,7 +648,7 @@ export default function ChatPanel({ projectId = '00000000-0000-0000-0000-0000000
                     <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
                   </svg>
                 </button>
-                <button className="chat-action-btn" title="Record voice">
+                <button className="chat-action-btn" title="Voice recording — Coming soon" disabled style={{ opacity: 0.35, cursor: 'not-allowed' }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
                     <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>

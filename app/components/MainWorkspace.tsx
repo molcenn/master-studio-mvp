@@ -1783,12 +1783,21 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
         .toolbar-btn:hover { background: rgba(255,255,255,0.05); color: var(--text-primary); border-color: var(--glass-border-hover); }
         .today-view { padding: 24px; overflow-y: auto; flex: 1; }
         .welcome-section { margin-bottom: 28px; }
-        .welcome-greeting { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
+        .welcome-greeting {
+          font-size: 28px;
+          font-weight: 800;
+          margin-bottom: 6px;
+          letter-spacing: -0.5px;
+        }
         .welcome-greeting span {
           background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
           -webkit-background-clip: text; -webkit-text-fill-color: transparent;
         }
-        .welcome-summary { font-size: 13px; color: var(--text-secondary); }
+        .welcome-summary {
+          font-size: 14px;
+          color: var(--text-secondary);
+          font-weight: 400;
+        }
         .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
         .stat-card {
           background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border);
@@ -1801,12 +1810,21 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
         }
         .stat-label { font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; }
         .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
-        .section-title { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
-        .section-action {
-          font-size: 11px; color: var(--accent-cyan); cursor: pointer;
-          border: none; background: none; padding: 4px 8px;
+        .section-title {
+          font-size: 14px;
+          font-weight: 700;
+          color: var(--text-primary);
+          letter-spacing: 0.3px;
         }
-        .project-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 28px; }
+        .section-action {
+          font-size: 11px;
+          color: var(--accent-cyan);
+          cursor: pointer;
+          border: none;
+          background: none;
+          padding: 4px 8px;
+          font-weight: 500;
+        }
         .project-card {
           background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border);
           border-radius: 12px; padding: 16px;
@@ -1905,11 +1923,10 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
         .priority-low { background: rgba(34,197,94,0.15); color: var(--accent-green); }
         .review-icon.document { background: rgba(34,197,94,0.15); }
         @media (max-width: 1024px) {
-          .project-cards { grid-template-columns: repeat(2, 1fr); }
+          .stats-row { grid-template-columns: repeat(2, 1fr); }
         }
         @media (max-width: 640px) {
-          .project-cards { grid-template-columns: 1fr; }
-          .stats-row { grid-template-columns: repeat(2, 1fr); }
+          .stats-row { grid-template-columns: 1fr; }
         }
         .empty-state {
           display: flex;

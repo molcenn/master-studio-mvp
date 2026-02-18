@@ -349,7 +349,15 @@ export default function Sidebar({ activeProject, setActiveProject, user, activeV
         .project-item:hover { background: rgba(255,255,255,0.04); }
         .project-item.active { background: rgba(0,212,255,0.08); }
         .project-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-        .project-item-name { font-size: 13px; color: var(--text-secondary); flex: 1; }
+        .project-item-name {
+          font-size: 13px;
+          color: var(--text-secondary);
+          flex: 1;
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
         .project-item.active .project-item-name { color: var(--text-primary); }
         .project-delete-btn {
           opacity: 0;
@@ -363,6 +371,7 @@ export default function Sidebar({ activeProject, setActiveProject, user, activeV
           align-items: center;
           justify-content: center;
           transition: all 0.15s ease;
+          flex-shrink: 0;
         }
         .project-item:hover .project-delete-btn { opacity: 1; }
         .project-delete-btn:hover { background: rgba(239, 68, 68, 0.2); color: #ef4444; }

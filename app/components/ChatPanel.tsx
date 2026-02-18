@@ -8,48 +8,53 @@ function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-function renderMarkdown(text: string, role: string = 'agent'): string {
-  // First, try to match explicit review request format
-  const reviewMatch = text.match(/REVIEW TALEBİ \| (.+?)\n\n```diff\n([\s\S]*?)```/)
-  if (reviewMatch) {
-    const title = reviewMatch[1]
-    const diffCode = reviewMatch[2]
-    const id = 'review-' + Math.random().toString(36).substr(2, 9)
-    const codePreview = diffCode.trim().substring(0, 30).replace(/'/g, "\\'")
-    
-    const lines = diffCode.trim().split('\n')
-    const diffLines = lines.map(line => {
-      const escaped = escapeHtml(line)
-      if (line.startsWith('-')) {
-        return `<div class="diff-line diff-removed"><span class="diff-marker">-</span><span class="diff-content">${escaped.substring(1)}</span></div>`
-      } else if (line.startsWith('+')) {
-        return `<div class="diff-line diff-added"><span class="diff-marker">+</span><span class="diff-content">${escaped.substring(1)}</span></div>`
-      } else if (line.startsWith('@@')) {
-        return `<div class="diff-line diff-hunk"><span class="diff-content">${escaped}</span></div>`
-      } else {
-        return `<div class="diff-line"><span class="diff-marker"> </span><span class="diff-content">${escaped}</span></div>`
-      }
-    }).join('')
-    
-    return `<div class="review-request-card">
-        <div class="review-request-header">
-          <div class="review-request-badge">REVIEW TALEBİ</div>
-          <div class="review-request-title">${escapeHtml(title)}</div>
-        </div>
-        <div class="diff-view-container">
-          ${diffLines}
-        </div>
-      </div>`
+// Message parts interface for separating content
+interface MessagePart {
+  type: 'text' | 'code' | 'diff'
+  content: string
+  lang?: string
+  id?: string
+}
+
+// Extract message parts: code blocks go outside bubble, diff stays inside
+function extractMessageParts(text: string, role: string = 'agent'): MessagePart[] {
+  const parts: MessagePart[] = []
+  let remaining = text
+
+  // First, extract normal code blocks (will be rendered outside bubble)
+  const codeBlockRegex = /```(?!diff)(\w*)\n([\s\S]*?)```/g
+  let lastIndex = 0
+  let match
+
+  while ((match = codeBlockRegex.exec(remaining)) !== null) {
+    // Add text before this code block
+    if (match.index > lastIndex) {
+      parts.push({ type: 'text', content: remaining.substring(lastIndex, match.index) })
+    }
+    // Add code block
+    parts.push({
+      type: 'code',
+      content: match[2].trim(),
+      lang: match[1] || 'code',
+      id: 'code-' + Math.random().toString(36).substr(2, 9)
+    })
+    lastIndex = match.index + match[0].length
   }
-  
-  // If no explicit review format, process normally but handle diff blocks specially
+
+  // Add remaining text
+  if (lastIndex < remaining.length) {
+    parts.push({ type: 'text', content: remaining.substring(lastIndex) })
+  }
+
+  return parts.length > 0 ? parts : [{ type: 'text', content: text }]
+}
+
+// Render text with markdown (excluding normal code blocks, including diff cards)
+function renderMarkdown(text: string, role: string = 'agent'): string {
   return text
-    // Diff blocks: ```diff → review card
+    // Diff blocks: ```diff → review card with actions (stays inside bubble)
     .replace(/```diff\n([\s\S]*?)```/g, (_, diffCode) => {
-      const id = 'review-' + Math.random().toString(36).substr(2, 9)
-      const codePreview = diffCode.trim().substring(0, 30).replace(/'/g, "\\'")
-      
-      // Parse diff lines with color coding
+      const id = 'diff-' + Math.random().toString(36).substr(2, 9)
       const lines = diffCode.trim().split('\n')
       const diffLines = lines.map((line: string) => {
         const escaped = escapeHtml(line)
@@ -63,8 +68,8 @@ function renderMarkdown(text: string, role: string = 'agent'): string {
           return `<div class="diff-line"><span class="diff-marker"> </span><span class="diff-content">${escaped}</span></div>`
         }
       }).join('')
-      
-      return `<div class="review-request-card">
+
+      return `<div class="review-request-card" data-diff-id="${id}">
           <div class="review-request-header">
             <div class="review-request-badge">CODE REVIEW</div>
             <div class="review-request-title">Diff</div>
@@ -72,28 +77,11 @@ function renderMarkdown(text: string, role: string = 'agent'): string {
           <div class="diff-view-container">
             ${diffLines}
           </div>
+          <div class="code-card-actions">
+            <button class="code-card-approve" onclick="window.handleDiffApprove('${id}')">✓ Approve</button>
+            <button class="code-card-reject" onclick="window.handleDiffReject('${id}')">✗ Reject</button>
+          </div>
         </div>`
-    })
-    // Code blocks: ```lang\ncode\n``` → different rendering based on role
-    .replace(/```(?!diff)(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
-      // User messages: no code card at all, just show as plain text
-      if (role === 'user') {
-        return `<span style="font-family:monospace;font-size:12px;opacity:0.85">${escapeHtml(code.trim())}</span>`
-      }
-      // Agent messages: styled code card
-      const lines = code.trim().split('\n')
-      const fullCode = escapeHtml(code.trim())
-      const lineCount = lines.length
-      const id = 'code-' + Math.random().toString(36).substr(2, 9)
-      return `<div class="chat-code-card">
-        <div class="chat-code-card-header">
-          <span class="chat-code-lines">${lineCount} lines</span>
-          <button class="chat-code-copy" onclick="navigator.clipboard.writeText(document.getElementById('${id}').textContent);this.textContent='✓';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
-        </div>
-        <div class="chat-code-scroll">
-          <pre class="chat-code-content" id="${id}"><code>${fullCode}</code></pre>
-        </div>
-      </div>`
     })
     // Inline code: `code` → <code>
     .replace(/`([^`]+)`/g, '<code class="chat-inline-code">$1</code>')
@@ -113,6 +101,24 @@ function renderMarkdown(text: string, role: string = 'agent'): string {
     .replace(/\n\n/g, '<div class="chat-paragraph-break"></div>')
     // Single newline → <br>
     .replace(/\n/g, '<br/>')
+}
+
+// Render code card HTML (rendered outside bubble)
+function renderCodeCard(part: MessagePart): string {
+  if (part.type !== 'code') return ''
+  const fullCode = escapeHtml(part.content)
+  const lineCount = part.content.split('\n').length
+
+  return `<div class="chat-code-card">
+    <div class="chat-code-card-header">
+      <span class="chat-code-lang">${part.lang || 'code'}</span>
+      <span class="chat-code-lines">${lineCount} lines</span>
+      <button class="chat-code-copy" onclick="navigator.clipboard.writeText(document.getElementById('${part.id}').textContent);this.textContent='✓';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
+    </div>
+    <div class="chat-code-scroll">
+      <pre class="chat-code-content" id="${part.id}"><code>${fullCode}</code></pre>
+    </div>
+  </div>`
 }
 
 interface ChatPanelProps {

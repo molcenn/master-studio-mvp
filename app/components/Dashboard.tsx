@@ -33,16 +33,57 @@ export default function Dashboard() {
   // Mock user for dev mode
   const currentUser = session?.user || { name: 'Murat', email: 'dev@localhost', image: null }
 
+  // Header data (mock)
+  const headerData = {
+    date: new Date().toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }),
+    weather: { temp: '12°C', condition: 'Partly Cloudy', city: 'Istanbul' },
+    rates: { usd: '36.42', eur: '38.15', btc: '97,245' },
+    time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+  }
+
   return (
     <div 
       className="h-screen"
       style={{ 
         display: 'grid',
-        gridTemplateColumns: `260px 1fr 4px ${chatWidth}px`,
+        gridTemplateRows: '40px 1fr',
         position: 'relative',
         zIndex: 1 
       }}
     >
+      {/* Header Bar */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '0 20px',
+        background: 'rgba(20, 20, 30, 0.4)',
+        backdropFilter: 'blur(40px) saturate(180%)',
+        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+        fontSize: '12px',
+        color: 'var(--text-secondary)'
+      }}>
+        <div style={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
+          <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{headerData.date}</span>
+          <span>🌡️ {headerData.weather.temp} • {headerData.weather.city}</span>
+        </div>
+        <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+          <span>$ {headerData.rates.usd}</span>
+          <span>€ {headerData.rates.eur}</span>
+          <span>₿ {headerData.rates.btc}</span>
+          <span style={{ fontWeight: 500, color: 'var(--accent-cyan)' }}>{headerData.time}</span>
+        </div>
+      </div>
+      
+      {/* Main Content */}
+      <div 
+        style={{ 
+          display: 'grid',
+          gridTemplateColumns: `260px 1fr 4px ${chatWidth}px`,
+          position: 'relative',
+          zIndex: 1 
+        }}
+      >
       <Sidebar 
         activeProject={activeProject} 
         setActiveProject={setActiveProject}

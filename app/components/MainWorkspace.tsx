@@ -7,6 +7,65 @@ import DeleteConfirmationModal from './DeleteConfirmationModal'
 import Calendar from './Calendar'
 import { getProjects, getProject, getStats, getFiles as getFilesLS, createFile, StoredFile, getPendingReviews, updateReviewStatus as updateReviewStatusLS, Review as ReviewType, updateProjectStatus as updateProjectStatusLS, updateProjectProgress as updateProjectProgressLS, ProjectStatus } from '@/lib/localStorage'
 
+// Header Bar Component with date, weather, currencies, time
+function HeaderBar() {
+  const [currentTime, setCurrentTime] = useState(new Date())
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  // Format date: "Wed 18 Feb 2026"
+  const formatDate = (date: Date) => {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    return `${days[date.getDay()]} ${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`
+  }
+
+  // Format time: "16:53:28"
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  }
+
+  // Mock data
+  const weather = { temp: 12, condition: 'Cloudy', icon: '☁️' }
+  const currencies = [
+    { pair: 'USD/TL', value: '36.42', change: '+0.15%' },
+    { pair: 'EUR/TL', value: '38.25', change: '-0.08%' },
+    { pair: 'BTC/USD', value: '97,842', change: '+2.34%' }
+  ]
+
+  return (
+    <div className="header-bar">
+      <div className="header-bar-left">
+        <span className="header-date">{formatDate(currentTime)}</span>
+        <span className="header-divider" />
+        <span className="header-weather">
+          <span className="weather-icon">{weather.icon}</span>
+          <span className="weather-temp">{weather.temp}°C</span>
+          <span className="weather-condition">{weather.condition}</span>
+          <span className="weather-location">Istanbul</span>
+        </span>
+      </div>
+      <div className="header-bar-center">
+        {currencies.map((c, i) => (
+          <span key={i} className="header-currency">
+            <span className="currency-pair">{c.pair}</span>
+            <span className="currency-value">{c.value}</span>
+            <span className={`currency-change ${c.change.startsWith('+') ? 'positive' : 'negative'}`}>
+              {c.change}
+            </span>
+          </span>
+        ))}
+      </div>
+      <div className="header-bar-right">
+        <span className="header-time">{formatTime(currentTime)}</span>
+      </div>
+    </div>
+  )
+}
+
 interface Project {
   id: string
   name: string
@@ -727,6 +786,9 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
 
   return (
     <main className="panel main" style={{ position: 'relative', display: 'flex', flexDirection: 'column' }}>
+      {/* Top Header Bar */}
+      <HeaderBar />
+      
       {/* Header */}
       <div className="main-header">
         <div className="main-header-left">
@@ -2414,12 +2476,21 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
           padding: 12px 18px; font-size: 13px; font-weight: 500;
           color: var(--text-secondary); background: transparent; border: none;
           border-bottom: 2px solid transparent; cursor: pointer; transition: all 0.15s ease;
+          min-width: 0;
+        }
+        .ide-tab svg {
+          flex-shrink: 0;
+        }
+        .ide-tab span:not(.ide-badge) {
+          white-space: nowrap;
         }
         .ide-tab:hover { color: var(--text-primary); background: rgba(255,255,255,0.03); }
         .ide-tab.active { color: var(--accent-cyan); border-bottom-color: var(--accent-cyan); }
         .ide-badge {
           font-size: 10px; padding: 2px 6px; background: var(--accent-cyan);
           color: #000; border-radius: 10px; font-weight: 600;
+          flex-shrink: 0;
+          margin-left: 4px;
         }
         .ide-code-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
         .code-selector {
@@ -2430,12 +2501,19 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
           display: flex; align-items: center; gap: 8px; padding: 6px 10px;
           background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
           border-radius: 6px; cursor: pointer; transition: all 0.15s ease; white-space: nowrap; color: var(--text-primary);
+          min-width: 0;
         }
         .code-sel-btn:hover { background: rgba(255,255,255,0.06); border-color: var(--glass-border-hover); }
         .code-sel-btn.active { background: rgba(0,212,255,0.1); border-color: var(--accent-cyan); }
         .lang-tag {
           font-size: 10px; padding: 2px 6px; background: var(--accent-purple);
           color: white; border-radius: 4px; font-weight: 600; text-transform: uppercase;
+          flex-shrink: 0;
+        }
+        .code-sel-btn span:not(.lang-tag) {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 150px;
         }
         .code-display { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
         .code-toolbar {

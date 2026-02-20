@@ -187,8 +187,7 @@ function timeAgo(date: string) {
   if (diffMins < 1) return 'Just now'
   if (diffMins < 60) return `${diffMins} minute${diffMins === 1 ? '' : 's'} ago`
   if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`
-  if (diffDays === 1) return 'Yesterday'
-  return `${diffDays} days ago`
+  return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`
 }
 
 interface Message {
@@ -1908,7 +1907,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
           font-weight: 500;
           border-radius: 4px;
           transition: opacity 0.15s ease;
-          margin-right: 0;
+          margin-right: 16px;
         }
         .section-action:hover { opacity: 0.75; }
         .section-action:focus-visible { outline: 2px solid var(--accent-cyan); outline-offset: 2px; }

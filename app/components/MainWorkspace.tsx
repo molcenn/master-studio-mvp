@@ -889,19 +889,27 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                     const currentStatus = statusConfig[status] || statusConfig.planning
                     
                     return (
-                      <div 
-                        key={project.id} 
+                      <div
+                        key={project.id}
                         className={`project-card-glass ${activeProject === project.id ? 'active' : ''}`}
                         onClick={() => {
                           setActiveProject(project.id)
                           setActiveView('workspace')
                         }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            setActiveProject(project.id)
+                            setActiveView('workspace')
+                          }
+                        }}
+                        tabIndex={0}
+                        role="button"
                       >
                         {/* Card Header */}
                         <div className="project-card-glass-header">
                           <div className="project-card-glass-title-row">
                             <h3 className="project-card-glass-name">{project.name}</h3>
-                            <span 
+                            <span
                               className="project-card-glass-status"
                               style={{ background: currentStatus.bg }}
                             >
@@ -1007,19 +1015,27 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                         const currentStatus = statusConfig[status] || statusConfig.planning
                         
                         return (
-                          <div 
-                            key={project.id} 
+                          <div
+                            key={project.id}
                             className={`project-card-glass ${activeProject === project.id ? 'active' : ''}`}
                             onClick={() => {
                               setActiveProject(project.id)
                               setActiveView('workspace')
                             }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                setActiveProject(project.id)
+                                setActiveView('workspace')
+                              }
+                            }}
+                            tabIndex={0}
+                            role="button"
                           >
                             {/* Card Header */}
                             <div className="project-card-glass-header">
                               <div className="project-card-glass-title-row">
                                 <h3 className="project-card-glass-name">{project.name}</h3>
-                                <span 
+                                <span
                                   className="project-card-glass-status"
                                   style={{ background: currentStatus.bg }}
                                 >

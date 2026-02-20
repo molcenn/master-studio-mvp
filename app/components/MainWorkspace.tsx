@@ -7,64 +7,6 @@ import DeleteConfirmationModal from './DeleteConfirmationModal'
 import Calendar from './Calendar'
 import { getProjects, getProject, getStats, getFiles as getFilesLS, createFile, StoredFile, getPendingReviews, updateReviewStatus as updateReviewStatusLS, Review as ReviewType, updateProjectStatus as updateProjectStatusLS, updateProjectProgress as updateProjectProgressLS, ProjectStatus } from '@/lib/localStorage'
 
-// Header Bar Component with date, weather, currencies, time
-function HeaderBar() {
-  const [currentTime, setCurrentTime] = useState(new Date())
-
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000)
-    return () => clearInterval(timer)
-  }, [])
-
-  // Format date: "Wed 18 Feb 2026"
-  const formatDate = (date: Date) => {
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    return `${days[date.getDay()]} ${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`
-  }
-
-  // Format time: "16:53:28"
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-  }
-
-  // Mock data
-  const weather = { temp: 12, condition: 'Cloudy', icon: '☁️' }
-  const currencies = [
-    { pair: 'USD/TL', value: '36.42', change: '+0.15%' },
-    { pair: 'EUR/TL', value: '38.25', change: '-0.08%' },
-    { pair: 'BTC/USD', value: '97,842', change: '+2.34%' }
-  ]
-
-  return (
-    <div className="header-bar">
-      <div className="header-bar-left">
-        <span className="header-date">{formatDate(currentTime)}</span>
-        <span className="header-divider" />
-        <span className="header-weather">
-          <span className="weather-icon">{weather.icon}</span>
-          <span className="weather-temp">{weather.temp}°C</span>
-          <span className="weather-condition">{weather.condition}</span>
-          <span className="weather-location">Istanbul</span>
-        </span>
-      </div>
-      <div className="header-bar-center">
-        {currencies.map((c, i) => (
-          <span key={i} className="header-currency">
-            <span className="currency-pair">{c.pair}</span>
-            <span className="currency-value">{c.value}</span>
-            <span className={`currency-change ${c.change.startsWith('+') ? 'positive' : 'negative'}`}>
-              {c.change}
-            </span>
-          </span>
-        ))}
-      </div>
-      <div className="header-bar-right">
-        <span className="header-time">{formatTime(currentTime)}</span>
-      </div>
-    </div>
-  )
-}
 
 interface Project {
   id: string
@@ -786,9 +728,6 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
 
   return (
     <main className="panel main" style={{ position: 'relative', display: 'flex', flexDirection: 'column' }}>
-      {/* Top Header Bar */}
-      <HeaderBar />
-      
       {/* Header */}
       <div className="main-header">
         <div className="main-header-left">
@@ -859,129 +798,6 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
                     <div className="stat-value" style={{ color: 'var(--accent-cyan)' }}>{stats?.todayMessageCount || 0}</div>
                     <div className="stat-label">Today's Messages</div>
                   </div>
-                </div>
-
-                {/* Active Projects */}
-                <div className="section-header">
-                  <span className="section-title">Active Projects</span>
-                  <button className="section-action" onClick={() => setActiveView('workspace')}>View All →</button>
-                </div>
-                <div className="project-cards-enhanced">
-                  {projects.slice(0, 4).map((project, index) => {
-                    const status = project.status || 'planning'
-                    const progress = typeof project.progress === 'number' ? project.progress : 0
-                    const description = project.description || 'No description available'
-                    
-                    // Mock team members for avatar display
-                    const teamMembers = [
-                      { name: 'Murat', color: '#00d4ff' },
-                      { name: 'Alex', color: '#a855f7' },
-                      { name: 'Sam', color: '#22c55e' },
-                    ].slice(0, Math.floor(Math.random() * 2) + 2)
-                    
-                    // Status badge styling
-                    const statusConfig = {
-                      active: { bg: 'linear-gradient(135deg, #22c55e, #16a34a)', label: 'Active', icon: '●' },
-                      review: { bg: 'linear-gradient(135deg, #f59e0b, #d97706)', label: 'Review', icon: '◐' },
-                      planning: { bg: 'linear-gradient(135deg, #6366f1, #4f46e5)', label: 'Planning', icon: '○' }
-                    }
-                    const currentStatus = statusConfig[status] || statusConfig.planning
-                    
-                    return (
-                      <div
-                        key={project.id}
-                        className={`project-card-glass ${activeProject === project.id ? 'active' : ''}`}
-                        onClick={() => {
-                          setActiveProject(project.id)
-                          setActiveView('workspace')
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            setActiveProject(project.id)
-                            setActiveView('workspace')
-                          }
-                        }}
-                        tabIndex={0}
-                        role="button"
-                      >
-                        {/* Card Header */}
-                        <div className="project-card-glass-header">
-                          <div className="project-card-glass-title-row">
-                            <h3 className="project-card-glass-name">{project.name}</h3>
-                            <span
-                              className="project-card-glass-status"
-                              style={{ background: currentStatus.bg }}
-                            >
-                              {currentStatus.icon} {currentStatus.label}
-                            </span>
-                          </div>
-                          <p className="project-card-glass-desc">{description}</p>
-                        </div>
-                        
-                        {/* Progress Section */}
-                        <div className="project-card-glass-progress">
-                          <div className="progress-header">
-                            <span className="progress-label-text">Progress</span>
-                            <span className="progress-value">{progress}%</span>
-                          </div>
-                          <div className="progress-bar-glass">
-                            <div 
-                              className="progress-bar-glass-fill"
-                              style={{ 
-                                width: `${progress}%`,
-                                background: progress > 75 
-                                  ? 'linear-gradient(90deg, #22c55e, #16a34a)' 
-                                  : progress > 50 
-                                    ? 'linear-gradient(90deg, #00d4ff, #a855f7)'
-                                    : 'linear-gradient(90deg, #6366f1, #4f46e5)'
-                              }}
-                            />
-                          </div>
-                        </div>
-                        
-                        {/* Card Footer */}
-                        <div className="project-card-glass-footer">
-                          {/* Team Avatars */}
-                          <div className="team-avatars">
-                            {teamMembers.slice(0, 3).map((member, i) => (
-                              <div 
-                                key={i} 
-                                className="team-avatar"
-                                style={{ 
-                                  background: member.color,
-                                  transform: `translateX(-${i * 6}px)`,
-                                  zIndex: 3 - i
-                                }}
-                                title={member.name}
-                              >
-                                {member.name[0]}
-                              </div>
-                            ))}
-                            {teamMembers.length > 3 && (
-                              <div 
-                                className="team-avatar team-avatar-more"
-                                style={{ transform: `translateX(-${3 * 6}px)`, zIndex: 0 }}
-                              >
-                                +{teamMembers.length - 3}
-                              </div>
-                            )}
-                          </div>
-                          
-                          {/* Last Activity */}
-                          <div className="last-activity">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <circle cx="12" cy="12" r="10"/>
-                              <polyline points="12 6 12 12 16 14"/>
-                            </svg>
-                            <span>{timeAgo(project.created_at)}</span>
-                          </div>
-                        </div>
-                        
-                        {/* Hover Gradient Overlay */}
-                        <div className="project-card-glass-gradient" />
-                      </div>
-                    )
-                  })}
                 </div>
 
                 {/* Two Column Grid: Active Projects | Pending Reviews */}

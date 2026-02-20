@@ -184,9 +184,10 @@ function timeAgo(date: string) {
   const diffHours = Math.floor(diffMs / 3600000)
   const diffDays = Math.floor(diffMs / 86400000)
 
-  if (diffMins < 60) return `${diffMins} min ago`
-  if (diffHours < 24) return `${diffHours} hours ago`
-  if (diffDays === 1) return '1 day ago'
+  if (diffMins < 1) return 'Just now'
+  if (diffMins < 60) return `${diffMins} minute${diffMins === 1 ? '' : 's'} ago`
+  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`
+  if (diffDays === 1) return 'Yesterday'
   return `${diffDays} days ago`
 }
 
@@ -1843,8 +1844,9 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
           transition: all 0.15s ease;
         }
         .toolbar-btn:hover { background: rgba(255,255,255,0.05); color: var(--text-primary); border-color: var(--glass-border-hover); }
+        .toolbar-btn:focus-visible { outline: 2px solid var(--accent-cyan); outline-offset: 2px; }
         .today-view { padding: 24px; overflow-y: auto; flex: 1; }
-        .welcome-section { margin-bottom: 28px; }
+        .welcome-section { margin-bottom: var(--spacing-section); }
         .welcome-greeting {
           font-size: 28px;
           font-weight: 800;
@@ -1860,10 +1862,12 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
           color: var(--text-secondary);
           font-weight: 400;
         }
-        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--spacing-card); margin-bottom: var(--spacing-section); }
         .stat-card {
-          background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border);
+          background: rgba(20,20,35,0.4); border: 1px solid var(--glass-border);
+          backdrop-filter: blur(16px) saturate(180%); -webkit-backdrop-filter: blur(16px) saturate(180%);
           border-radius: 12px; padding: 14px 16px;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
         .stat-value { font-size: 22px; font-weight: 700; margin-bottom: 2px; }
         .stat-value.gradient {
@@ -1886,13 +1890,21 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
           background: none;
           padding: 4px 8px;
           font-weight: 500;
+          border-radius: 4px;
+          transition: opacity 0.15s ease;
+          margin-right: 0;
         }
+        .section-action:hover { opacity: 0.75; }
+        .section-action:focus-visible { outline: 2px solid var(--accent-cyan); outline-offset: 2px; }
         .project-card {
-          background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border);
+          background: rgba(20,20,35,0.4); border: 1px solid var(--glass-border);
+          backdrop-filter: blur(16px) saturate(180%); -webkit-backdrop-filter: blur(16px) saturate(180%);
           border-radius: 12px; padding: 16px;
           cursor: pointer; transition: all 0.2s ease;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
-        .project-card:hover { border-color: var(--glass-border-hover); background: rgba(0,0,0,0.3); transform: translateY(-1px); }
+        .project-card:focus-visible { outline: 2px solid var(--accent-cyan); outline-offset: 2px; }
+        .project-card:hover { border-color: var(--glass-border-hover); background: rgba(30,30,50,0.5); transform: translateY(-1px); box-shadow: 0 4px 6px rgba(0,0,0,0.1), 0 8px 16px rgba(0,0,0,0.2); }
         .project-card.active { border-color: var(--accent-cyan); background: rgba(0,212,255,0.05); }
         .project-card-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
         .project-card-name { font-size: 14px; font-weight: 600; }
@@ -1918,9 +1930,12 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
         .project-card-status-select.status-active { background-color: rgba(34,197,94,0.15); color: var(--accent-green); }
         .project-card-status-select.status-review { background-color: rgba(245,158,11,0.15); color: var(--accent-amber); }
         .project-card-status-select.status-planning { background-color: rgba(59,130,246,0.15); color: var(--accent-blue); }
-        .status-active { background: rgba(34,197,94,0.15); color: var(--accent-green); }
-        .status-review { background: rgba(245,158,11,0.15); color: var(--accent-amber); }
-        .status-planning { background: rgba(59,130,246,0.15); color: var(--accent-blue); }
+        .status-active { background: var(--status-active); color: #ffffff; }
+        .status-review { background: var(--status-review); color: #ffffff; }
+        .status-planning { background: var(--status-planning); color: #ffffff; }
+        .project-card-status-select.status-active { background-color: var(--status-active); color: #ffffff; }
+        .project-card-status-select.status-review { background-color: var(--status-review); color: #ffffff; }
+        .project-card-status-select.status-planning { background-color: var(--status-planning); color: #ffffff; }
         .project-card-progress { margin-bottom: 12px; position: relative; }
         .progress-slider {
           width: 100%; height: 4px; margin-top: 4px;
@@ -1968,11 +1983,14 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
         .review-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 28px; }
         .review-item {
           display: flex; align-items: center; gap: 14px;
-          background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border);
+          background: rgba(20,20,35,0.4); border: 1px solid var(--glass-border);
+          backdrop-filter: blur(16px) saturate(180%); -webkit-backdrop-filter: blur(16px) saturate(180%);
           border-radius: 12px; padding: 12px 16px;
           cursor: pointer; transition: all 0.15s ease;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
-        .review-item:hover { border-color: var(--glass-border-hover); }
+        .review-item:focus-visible { outline: 2px solid var(--accent-cyan); outline-offset: 2px; }
+        .review-item:hover { border-color: var(--glass-border-hover); background: rgba(30,30,50,0.5); }
         .review-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
         .review-icon.code { background: rgba(168,85,247,0.15); }
         .review-icon.asset { background: rgba(0,212,255,0.15); }
@@ -2252,6 +2270,7 @@ export default function MainWorkspace({ activeProject, activeView, setActiveProj
           transform: translateY(-1px);
           box-shadow: 0 4px 12px rgba(0, 212, 255, 0.3);
         }
+        .action-btn:focus-visible { outline: 2px solid var(--accent-cyan); outline-offset: 2px; }
         .action-btn.secondary {
           background: rgba(255,255,255,0.05);
           color: var(--text-primary);

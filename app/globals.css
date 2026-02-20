@@ -3,11 +3,15 @@
 @tailwind utilities;
 
 :root {
-  --glass-bg: rgba(20, 20, 30, 0.6);
-  --glass-bg-hover: rgba(30, 30, 45, 0.7);
+  /* Glass morphism standard */
+  --glass-bg: rgba(20, 20, 30, 0.4);
+  --glass-bg-hover: rgba(30, 30, 45, 0.55);
   --glass-border: rgba(255, 255, 255, 0.08);
   --glass-border-hover: rgba(255, 255, 255, 0.15);
-  --glass-blur: blur(40px);
+  --glass-blur: blur(16px) saturate(180%);
+  --glass-saturate: 180%;
+
+  /* Accent colors */
   --accent-cyan: #00d4ff;
   --accent-purple: #a855f7;
   --accent-pink: #ec4899;
@@ -15,9 +19,31 @@
   --accent-amber: #f59e0b;
   --accent-red: #ef4444;
   --accent-blue: #3b82f6;
+
+  /* Text */
   --text-primary: #ffffff;
   --text-secondary: rgba(255, 255, 255, 0.6);
   --text-tertiary: rgba(255, 255, 255, 0.35);
+
+  /* Status colors */
+  --status-active: #10B981;
+  --status-review: #F59E0B;
+  --status-planning: #3B82F6;
+
+  /* Badge standard */
+  --badge-height: 24px;
+  --badge-padding: 6px 10px;
+  --badge-radius: 4px;
+  --badge-text: #FFFFFF;
+
+  /* Button standard */
+  --button-height: 38px;
+  --button-padding: 12px 20px;
+
+  /* Spacing */
+  --spacing-section: 20px;
+  --spacing-card: 16px;
+
   --sidebar-width: 260px;
   --chat-width: 380px;
 }
@@ -106,9 +132,9 @@ body::after {
 /* Enhanced Project Cards - Glass Morphism */
 .project-cards-enhanced {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 20px;
-  margin-bottom: 24px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--spacing-section);
+  margin-bottom: var(--spacing-section);
 }
 
 @media (max-width: 768px) {
@@ -121,14 +147,19 @@ body::after {
 .project-card-glass {
   position: relative;
   background: rgba(20, 20, 35, 0.4);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
   padding: 20px;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
+  /* Uniform card height */
+  display: flex;
+  flex-direction: column;
+  min-height: 180px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 .project-card-glass::before {
@@ -145,13 +176,18 @@ body::after {
 
 .project-card-glass:hover {
   background: rgba(30, 30, 50, 0.5);
-  border-color: rgba(255, 255, 255, 0.12);
-  transform: translateY(-6px);
+  border-color: rgba(255, 255, 255, 0.16);
+  transform: translateY(-4px);
   box-shadow:
-    0 24px 48px rgba(0, 0, 0, 0.4),
-    0 0 60px rgba(0, 212, 255, 0.08),
-    0 0 80px rgba(168, 85, 247, 0.08),
+    0 4px 6px rgba(0, 0, 0, 0.1),
+    0 16px 32px rgba(0, 0, 0, 0.35),
+    0 0 40px rgba(0, 212, 255, 0.07),
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.project-card-glass:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
 }
 
 .project-card-glass:hover::before {
@@ -182,6 +218,7 @@ body::after {
 /* Card Header */
 .project-card-glass-header {
   margin-bottom: 16px;
+  flex-shrink: 0;
 }
 
 .project-card-glass-title-row {
@@ -211,16 +248,18 @@ body::after {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 6px 14px;
-  border-radius: 16px;
+  height: var(--badge-height);
+  padding: var(--badge-padding);
+  border-radius: var(--badge-radius);
   font-size: 11px;
   font-weight: 700;
-  color: white;
+  color: var(--badge-text) !important;
   text-transform: uppercase;
   letter-spacing: 0.8px;
   flex-shrink: 0;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 
 .project-card-glass-desc {
@@ -237,6 +276,7 @@ body::after {
 /* Progress Section */
 .project-card-glass-progress {
   margin-bottom: 16px;
+  flex-shrink: 0;
 }
 
 .progress-header {
@@ -262,7 +302,7 @@ body::after {
 }
 
 .progress-bar-glass {
-  height: 6px;
+  height: 3px;
   background: rgba(255, 255, 255, 0.06);
   border-radius: 3px;
   overflow: hidden;
@@ -292,6 +332,7 @@ body::after {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  margin-top: auto;
 }
 
 /* Team Avatars */
@@ -301,18 +342,23 @@ body::after {
 }
 
 .team-avatar {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: white;
   border: 2px solid rgba(20, 20, 35, 0.9);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
   transition: transform 0.2s ease;
+  margin-left: -6px;
+}
+
+.team-avatar:first-child {
+  margin-left: 0;
 }
 
 .team-avatar-more {
@@ -349,8 +395,8 @@ body::after {
 .dashboard-two-col {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 24px;
-  margin-bottom: 24px;
+  gap: var(--spacing-section);
+  margin-bottom: var(--spacing-section);
 }
 
 .dashboard-col {
@@ -382,20 +428,26 @@ body::after {
 .review-card-glass {
   position: relative;
   background: rgba(20, 20, 35, 0.45);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
   padding: 18px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 .review-card-glass:hover {
   background: rgba(30, 30, 50, 0.55);
   border-color: rgba(255, 255, 255, 0.14);
-  transform: translateX(6px);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
+  transform: translateX(4px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 12px 24px rgba(0, 0, 0, 0.3);
+}
+
+.review-card-glass:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
 }
 
 /* Review Card Header */
@@ -453,13 +505,13 @@ body::after {
 }
 
 .review-sender-avatar {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   color: white;
 }
@@ -480,13 +532,19 @@ body::after {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 6px 12px;
+  height: var(--button-height);
+  padding: var(--button-padding);
   border-radius: 6px;
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
   border: none;
   transition: all 0.15s ease;
+}
+
+.review-btn:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
 }
 
 .review-btn.approve {
@@ -557,4 +615,48 @@ body::after {
   .dashboard-two-col {
     grid-template-columns: 1fr;
   }
+}
+
+/* Global focus-visible reset - ensure all interactive elements have keyboard accessibility */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
+}
+
+/* Elevation shadows */
+.elevation-1 {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.elevation-2 {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 8px 16px rgba(0, 0, 0, 0.2);
+}
+
+.elevation-3 {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 16px 32px rgba(0, 0, 0, 0.35);
+}
+
+/* Section header "View All" button - consistent 16px right margin */
+.section-view-all {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: color 0.15s ease;
+  margin-right: 0;
+}
+
+.section-view-all:hover {
+  color: var(--accent-cyan);
+}
+
+.section-view-all:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
 }

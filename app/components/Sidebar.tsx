@@ -330,6 +330,7 @@ export default function Sidebar({ activeProject, setActiveProject, user, activeV
           position: relative;
         }
         .nav-item:hover { background: rgba(255,255,255,0.04); color: var(--text-primary); }
+        .nav-item:focus-visible { outline: 2px solid var(--accent-cyan); outline-offset: 2px; }
         .nav-item.active {
           background: linear-gradient(135deg, rgba(0,212,255,0.1), rgba(168,85,247,0.1));
           color: var(--text-primary);
@@ -347,6 +348,7 @@ export default function Sidebar({ activeProject, setActiveProject, user, activeV
           cursor: pointer; transition: all 0.15s ease;
         }
         .project-item:hover { background: rgba(255,255,255,0.04); }
+        .project-item:focus-visible { outline: 2px solid var(--accent-cyan); outline-offset: 2px; }
         .project-item.active { background: rgba(0,212,255,0.08); }
         .project-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
         .project-item-name {
@@ -383,6 +385,7 @@ export default function Sidebar({ activeProject, setActiveProject, user, activeV
           transition: all 0.15s ease; width: 100%;
         }
         .new-project-btn:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+        .new-project-btn:focus-visible { outline: 2px solid var(--accent-cyan); outline-offset: 2px; }
         .modal-overlay {
           position: fixed; top: 0; left: 0; right: 0; bottom: 0;
           background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);

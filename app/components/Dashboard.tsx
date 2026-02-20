@@ -130,6 +130,7 @@ export default function Dashboard() {
           setActiveView('workspace')
         }}
       />
+      </div>
     </div>
   )
 }
